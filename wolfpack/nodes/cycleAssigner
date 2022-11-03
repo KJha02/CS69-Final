@@ -1,0 +1,61 @@
+#!/usr/bin/env python
+import roslib
+roslib.load_manifest('wolfpack')
+import random
+import rospy
+from wolfpack.msg import CoordArray, FloatList, calcWays
+
+FREQUENCY = 5
+
+class Assigner:
+    def __init__(self, numRobots, cycle):
+        self.numRobots = numRobots
+        self.rate = rospy.Rate(FREQUENCY)
+
+        self.cycle = cycle
+
+        self.assigned_path = {}
+        self.patrol_publishers = {}
+        path_pct = len(self.cycle) // self.numRobots
+        for i in range(self.numRobots):  # assigning default paths
+            self.assigned_path[i] = self.cycle[path_pct * i:] + self.cycle[:path_pct * i]
+            self.patrol_publishers[i] = rospy.Publisher('/robot_' + str(i) + '/patrol', CoordArray, queue_size=1)
+
+    def publish_paths(self):
+        # publishing default paths
+        for i in range(self.numRobots):
+            robotPath = CoordArray()
+            robotPath.coords = []
+            for coord in self.assigned_path[i]:  # getting the robot path as a msg
+                coord_list = FloatList()
+                coord_list.elements = coord
+                coord_list.robot_id = -1  # dummy values
+                coord_list.dist = float("inf")  # dummy values
+                robotPath.coords.append(coord_list)
+            self.patrol_publishers[i].publish(robotPath)  # publish the patrol message
+
+def main():
+    numRobots = rospy.get_param("/numRobots")
+    testcoords = []
+    for y in range(-1,2):
+        for x in range(-1, 2, 2):
+            testcoords.append([x, y])
+
+    assigner = Assigner(numRobots, testcoords)
+    rate = rospy.Rate(FREQUENCY)
+    while not rospy.is_shutdown():
+        assigner.publish_paths()
+        print("published")
+        rate.sleep()
+
+
+if __name__ == "__main__":
+    # 1st. initialization of node.
+    print("initializing node")
+    rospy.init_node("cycleAssigner")
+    print("initialized node")
+    # Sleep for a few seconds to wait for the registration.
+    print("sleeping")
+    rospy.sleep(7)
+    print("finished sleeping")
+    main()
