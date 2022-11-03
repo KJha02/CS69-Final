@@ -1,0 +1,67 @@
+include "turtlebot.inc"
+
+define floorplan model
+(
+  # sombre, sensible, artistic
+  color "gray30"
+
+  # most maps will need a bounding box
+  boundary 1
+
+  gui_nose 0
+  gui_grid 0
+  gui_outline 0
+  gripper_return 0
+  fiducial_return 0
+  laser_return 1
+)
+
+resolution 0.02
+interval_sim 100  # simulation timestep in milliseconds
+
+window
+(
+  size [ 600.0 700.0 ]
+  center [ 0.0 0.0 ]
+  rotate [ 0.0 0.0 ]
+  scale 60
+)
+
+# throw multiple robots
+turtlebot
+(
+  pose [ -1.0 0.0 0.0 0.0 ]
+  name "rb_1"
+  color "black"
+)
+turtlebot
+(
+  pose [ -1.0 1.0 0.0 0.0 ]
+  name "rb_2"
+  color "black"
+)
+turtlebot
+(
+  pose [ -1.0 -1.0 0.0 0.0 ]
+  name "rb_3"
+  color "black"
+)
+turtlebot
+(
+  pose [ 1.0 0.0 0.0 0.0 ]
+  name "rb_4"
+  color "black"
+)
+turtlebot
+(
+  pose [ 1.0 1.0 0.0 0.0 ]
+  name "rb_5"
+  color "black"
+)
+
+turtlebot
+(
+  pose [ 1.0 -1.0 0.0 0.0 ]
+  name "rb_6"
+  color "black"
+)

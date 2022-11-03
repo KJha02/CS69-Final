@@ -1,0 +1,99 @@
+<launch>
+    <arg name="world_file" default="$(find wolfpack)/worlds/wolf_stage.world" />
+    <param name="/use_sim_time" value="true"/>
+    <param name="/numRobots" value="6"/>
+    <param name="/com_dist" value="3"/>
+    <!-- <param name="/steiner_len" value="4"/> -->
+
+    <node pkg="stage_ros" type="stageros" name="stageros" args="$(arg world_file)">
+      <param name="base_watchdog_timeout" value="0.5"/>
+      <remap from="odom" to="odom"/>
+      <remap from="base_pose_ground_truth" to="base_pose_ground_truth"/>
+      <remap from="cmd_vel" to="mobile_base/commands/velocity"/>
+      <remap from="base_scan" to="scan"/>
+    </node>
+<!--
+    <node pkg="auction" type="waypointPub" name="waypointPub"/> -->
+
+    <group ns= "robot_0">
+      <param name="robot_name" value="robot_0" />
+      <remap from="base_scan" to="scan" />
+    </group>
+    <group ns= "robot_1">
+      <param name="robot_name" value="robot_1" />
+      <remap from="base_scan" to="scan" />
+    </group>
+    <group ns= "robot_2">
+      <param name="robot_name" value="robot_2" />
+      <remap from="base_scan" to="scan" />
+    </group>
+    <group ns= "robot_3">
+      <param name="robot_name" value="robot_3" />
+      <remap from="base_scan" to="scan" />
+    </group>
+    <group ns= "robot_4">
+      <param name="robot_name" value="robot_4" />
+      <remap from="base_scan" to="scan" />
+    </group>
+    <group ns= "robot_5">
+      <param name="robot_name" value="robot_5" />
+      <remap from="base_scan" to="scan" />
+    </group>
+
+    <!-- <node name="robot_0_tf_broadcaster" pkg="auction" type="broadcaster" respawn="false" output="screen" >
+      <param name="turtle" type="string" value="robot_0" />
+    </node>
+    <node name="robot_1_tf_broadcaster" pkg="auction" type="broadcaster" respawn="false" output="screen" >
+      <param name="turtle" type="string" value="robot_1" />
+    </node>
+    <node name="robot_2_tf_broadcaster" pkg="auction" type="broadcaster" respawn="false" output="screen" >
+      <param name="turtle" type="string" value="robot_2" />
+    </node>
+    <node name="robot_3_tf_broadcaster" pkg="auction" type="broadcaster" respawn="false" output="screen" >
+      <param name="turtle" type="string" value="robot_3" />
+    </node>
+    <node name="robot_4_tf_broadcaster" pkg="auction" type="broadcaster" respawn="false" output="screen" >
+      <param name="turtle" type="string" value="robot_4" />
+    </node>
+    <node name="robot_5_tf_broadcaster" pkg="auction" type="broadcaster" respawn="false" output="screen" >
+      <param name="turtle" type="string" value="robot_5" />
+    </node>
+
+    <node name="robot_0_init_pose" pkg="auction" type="initposes" respawn="false" output="screen" >
+      <param name="turtle" type="string" value="robot_0" />
+      <param name= "x_pos" value="-1.0"/>
+      <param name= "y_pos" value="0.0"/>
+      <param name= "z_pos" value="0.0"/>
+    </node>
+    <node name="robot_1_init_pose" pkg="auction" type="initposes" respawn="false" output="screen" >
+      <param name="turtle" type="string" value="robot_1" />
+      <param name= "x_pos" value="-1.0"/>
+      <param name= "y_pos" value="1.0"/>
+      <param name= "z_pos" value="0.0"/>
+    </node>
+    <node name="robot_2_init_pose" pkg="auction" type="initposes" respawn="false" output="screen" >
+      <param name="turtle" type="string" value="robot_2" />
+      <param name= "x_pos" value="-1.0"/>
+      <param name= "y_pos" value="-1.0"/>
+      <param name= "z_pos" value="0.0"/>
+    </node>
+    <node name="robot_3_init_pose" pkg="auction" type="initposes" respawn="false" output="screen" >
+      <param name="turtle" type="string" value="robot_3" />
+      <param name= "x_pos" value="1.0"/>
+      <param name= "y_pos" value="0.0"/>
+      <param name= "z_pos" value="0.0"/>
+    </node>
+    <node name="robot_4_init_pose" pkg="auction" type="initposes" respawn="false" output="screen" >
+      <param name="turtle" type="string" value="robot_4" />
+      <param name= "x_pos" value="1.0"/>
+      <param name= "y_pos" value="1.0"/>
+      <param name= "z_pos" value="0.0"/>
+    </node>
+    <node name="robot_5_init_pose" pkg="auction" type="initposes" respawn="false" output="screen" >
+      <param name="turtle" type="string" value="robot_5" />
+      <param name= "x_pos" value="1.0"/>
+      <param name= "y_pos" value="-1.0"/>
+      <param name= "z_pos" value="0.0"/>
+    </node> -->
+
+</launch>
