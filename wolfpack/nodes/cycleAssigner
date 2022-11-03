@@ -45,7 +45,6 @@ def main():
     rate = rospy.Rate(FREQUENCY)
     while not rospy.is_shutdown():
         assigner.publish_paths()
-        print("published")
         rate.sleep()
 
 
