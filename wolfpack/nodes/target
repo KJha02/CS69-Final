@@ -1,0 +1,80 @@
+#!/usr/bin/env python
+
+# AUTHOR: Anna Mikhailova
+# CLASS: Multi-Robot Systems, 22F, Final Project
+
+# PURPOSE: a node for the target robot, which shares its location with the patroller robots 
+# once patrollers are in range of the target
+
+# --------------------------------------------------------------------------------------------------------------------------------------------------
+# import of relevant python modules and libraries
+import rospy
+import tf
+import re
+from geometry_msgs.msg import Pose
+
+# topic constants
+TGT_TOPIC = "/target"
+
+# constants
+FREQUENCY = 10 #Hz.
+
+# --------------------------------------------------------------------------------------------------------------------------------------------------
+class Target:
+    def __init__(self):
+        # setting up location publisher
+        self._target_pub = rospy.Publisher(TGT_TOPIC, Pose, queue_size=1)
+
+        # setting up tf listener to get the position of the robot relative to the world frame
+        self.listener = tf.TransformListener()
+
+        # name of the target (for location purposes)
+        self.bot_name = "robot_" + str(int(re.search(r'\d+', rospy.get_namespace()).group())) 
+
+
+    # Method to retrive and return the current position of the target with respect to the world frame
+    def retrieve_pose(self):
+        target_pose = Pose() # initialize target position
+
+        now = rospy.Time(0)
+        self.listener.waitForTransform("world", self.bot_name + "/odom", now, rospy.Duration(4.0))
+
+        # get the transform and rotation matrices from tf listener
+        (trans, rot) = self.listener.lookupTransform("world", self.bot_name + "/odom", now)
+
+        # populate the target position
+        target_pose.position.x, target_pose.position.y = trans[0], trans[1]
+
+        print(target_pose.position.x, target_pose.position.y)
+    
+        return target_pose
+
+
+
+def main():
+    # 1st. initialization of node.
+    rospy.init_node("target")
+
+    # Sleep for a few seconds to wait for the registration.
+    rospy.sleep(2)
+
+    # Initialization of the class for the simple motion.
+    target = Target()
+
+    rospy.sleep(4)
+    rate = rospy.Rate(FREQUENCY)
+
+    try:
+        while not rospy.is_shutdown(): #-- implement while loop later on when we don't have a stationary target
+            msg = Pose() # create a pose message that will store the position of the target
+            msg = target.retrieve_pose()
+            rospy.sleep(2)
+            target._target_pub.publish(msg) # publish the position of the target
+
+
+    except rospy.ROSInterruptException:
+        rospy.logerr("ROS node interrupted.")
+
+if __name__ == "__main__":
+    """Run the main function."""
+    main()      
