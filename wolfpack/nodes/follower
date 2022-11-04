@@ -14,11 +14,11 @@ from tf.transformations import euler_from_quaternion
 
 DEFAULT_CMD_VEL_TOPIC = '/cmd_vel'
 FREQUENCY = 5
-ANGULAR_VELOCITY = math.pi/4 # rad/s
+ANGULAR_VELOCITY = math.pi/2 # rad/s
 DEFAULT_ODOM_TOPIC = '/odom'
 DEFAULT_BASE_LINK = '/base_link'
 DEFAULT_PATROL_NAME = '/patrol'
-VELOCITY_SCALE = 1
+VELOCITY_SCALE = 0.2
 
 def euclid_dist(x1, y1, x2, y2):
     return ((x1-x2)**2 + (y1-y2)**2)**0.5
@@ -47,7 +47,6 @@ class Follower:
 
     def patrol_cb(self, msg):
         self.patrol_path = []
-        print(msg)
         path = []
         self.rate.sleep()
         for coords in msg.coords:  # we have FloatLists here
@@ -64,8 +63,6 @@ class Follower:
 
     def patrol(self):
         if len(self.patrol_path) > 0:  # non empty patrol path
-            print("Found patrol path")
-            print(self.patrol_path)
             for target in self.patrol_path:
                 coords = self.get_transformed_point(target)
                 coords = [coords.point.x, coords.point.y]
@@ -75,16 +72,14 @@ class Follower:
                 dist = euclid_dist(coords[0], coords[1], 0, 0)
 
                 # normalize velocity
-                vx /= dist
-                vy /= dist
+                if dist != 0:
+                    vx /= dist
+                    vy /= dist
                 # scale velocity
                 vx *= VELOCITY_SCALE
                 vy *= VELOCITY_SCALE
 
-                if (vx != 0):
-                    angle = math.atan(vy/vx)
-                else:
-                    angle = 0
+                angle = math.atan2(vy, vx)
 
                 if angle * -1 >= 0:
                     clockwise = True
@@ -94,7 +89,7 @@ class Follower:
                 self.rotate_in_place(angle, clockwise)  # move
                 self.move_forward(dist)  # move
                 self.rotate_in_place(angle, not clockwise) # rotating back to original face
-
+                rospy.sleep(10)
                 self.rate.sleep()
 
 
@@ -158,9 +153,12 @@ def main():
     # try:
     rate = rospy.Rate(FREQUENCY)
     while not rospy.is_shutdown():
-        print("trying to patrol for robot " + robot_name)
-        follower.patrol()
-        print("finished patrolling for robot " + robot_name)
+        if robot_name == "robot_3":
+            print(follower.patrol_path)
+        try:
+            follower.patrol()
+        except:
+            print("The follower failed")
         rate.sleep()
     # except rospy.ROSInterruptException:
     #     rospy.logerr("ROS node interrupted.")
