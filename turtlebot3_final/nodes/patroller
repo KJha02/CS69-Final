@@ -1,0 +1,183 @@
+#!/usr/bin/env python
+
+# AUTHOR: Anna Mikhailova
+# CLASS: Multi-Robot Systems, 22F, Final Project
+
+# PURPOSE: a node for the patroller robots with flocking behaviour implemented when in range of target
+
+# --------------------------------------------------------------------------------------------------------------------------------------------------
+# import of relevant python modules and libraries
+import rospy
+import tf
+import re
+import numpy as np
+import math
+from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Twist # message type for cmd_vel
+
+# topic constants
+TGT_TOPIC = "/target"
+DEFAULT_CMD_VEL_TOPIC = "cmd_vel"
+
+# constants
+FREQUENCY = 10 #Hz.
+TGT_RANGE = 10 # range within which patrollers actually register target's position and commence flocking behaviour
+RADIUS = 5 # radius for surrounding behaviour
+ANGULAR_VELOCITY = math.pi/4  # rads/sec
+LINEAR_VELOCITY = 0.5 # m/s
+
+# parameters
+NUM_BOTS = rospy.get_param("num_bots", 3)
+
+# --------------------------------------------------------------------------------------------------------------------------------------------------
+class Patroller:
+    def __init__(self):
+        # setting up target's location subscriber
+        self._target_sub = rospy.Subscriber(TGT_TOPIC, Pose, self._tgt_callback, queue_size=1)      
+
+        # setting up tf listener to get the position of the robot relative to the world frame
+        self.listener = tf.TransformListener()
+    
+        self._cmd_vel_pub = rospy.Publisher(DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
+
+        # name of the patroller (for location purposes)
+        self.bot_name = "robot_" + str(int(re.search(r'\d+', rospy.get_namespace()).group())) 
+        # number of the patroller (for waypoint calculation purposes)
+        self.bot_num = int(re.search(r'\d+', rospy.get_namespace()).group())
+
+    
+        # instance variables
+        self.patroller_pose = Pose()
+        self.target_pose = Pose()
+        self.waypoint = Pose()
+
+
+    # Method to retrive and return the current position of the patroller with respect to the world frame
+    def retrieve_pose(self):
+        patroller_pose = Pose() # initialize patroller position
+
+        now = rospy.Time(0)
+        self.listener.waitForTransform("world", self.bot_name + "/odom", now, rospy.Duration(4.0))
+
+        # get the transform and rotation matrices from tf listener
+        (trans, rot) = self.listener.lookupTransform("world", self.bot_name + "/odom", now)
+
+        # populate the patroller position
+        patroller_pose.position.x, patroller_pose.position.y = trans[0], trans[1]
+    
+        return patroller_pose
+
+   # method to compute the waypoint the patroller should go to
+    def compute_wpt(self, target_pose):
+        cx, cy = target_pose.position.x, target_pose.position.y # center of the flocking circle
+        theta = 2 * math.pi * self.bot_num / NUM_BOTS # angle used to compute waypoints
+
+        px = cx + RADIUS * math.cos(theta) # x coordinate of waypoint
+        py = cy + RADIUS * math.sin(theta) # y coordinate of waypoint
+
+        self.waypoint.position.x, self.waypoint.position.y = px, py        
+
+
+################################################################################################################################
+# FROM SIMPLE MOTION
+################################################################################################################################
+    # function to move forward a given distance -- don't need to implement rotation, correct? since each bot gets one waypoint
+    def move_forward(self, distance):
+        # Rate at which to operate the while loop.
+        rate = rospy.Rate(FREQUENCY)
+
+        # Setting velocities. 
+        twist_msg = Twist()
+        twist_msg.linear.x = LINEAR_VELOCITY
+        start_time = rospy.get_rostime()
+        duration = rospy.Duration(distance/twist_msg.linear.x)
+
+        # Loop.
+        while not rospy.is_shutdown():
+            # Check if traveled of given distance based on time.
+            if rospy.get_rostime() - start_time >= duration:
+                break
+
+            # Publish message.
+            self._cmd_vel_pub.publish(twist_msg)
+
+            # Sleep to keep the set publishing frequency.
+            rate.sleep()
+
+        # Traveled the required distance, stop.
+        self.stop()    
+
+
+    def rotate_in_place(self, rotation_angle):
+        twist_msg = Twist()
+        twist_msg.angular.z = ANGULAR_VELOCITY
+        if rotation_angle < 0:
+            twist_msg.angular.z = -twist_msg.angular.z
+        duration = rotation_angle / twist_msg.angular.z
+
+        if duration < 0:
+            duration = -duration
+
+        start_time = rospy.get_rostime()
+        rate = rospy.Rate(FREQUENCY)
+
+        while not rospy.is_shutdown():
+            if rospy.get_rostime() - start_time >= rospy.Duration(duration):  # Check if done
+                break
+
+            self._cmd_vel_pub.publish(twist_msg)  # Publish message.
+            rate.sleep()  # Sleep to keep the set frequency.
+
+        self.stop()  # Rotated the required angle, stop.
+
+    def stop(self):
+        """Stop the robot."""
+        twist_msg = Twist()
+        self._cmd_vel_pub.publish(twist_msg)
+
+################################################################################################################################
+################################################################################################################################
+
+    
+    # callback method for the target position subscriber
+    def _tgt_callback(self, msg):
+        self.patroller_pose = self.retrieve_pose()
+        print(self.patroller_pose)
+
+        # compute the distance between the patroller and the target
+        distance = np.linalg.norm(np.array([self.patroller_pose.position.x - msg.position.x, self.patroller_pose.position.y - msg.position.y]))
+
+        if distance <= TGT_RANGE:
+            self.target_pose = msg
+            self.compute_wpt(self.target_pose)
+
+def main():
+    # 1st. initialization of node.
+    rospy.init_node("patroller")
+
+    # Sleep for a few seconds to wait for the registration.
+    rospy.sleep(2)
+
+    # Initialization of the class for the simple motion.
+    patroller = Patroller()
+
+    # If interrupted, send a stop command.
+    rospy.on_shutdown(patroller.stop)
+    rospy.sleep(4)
+    rate = rospy.Rate(FREQUENCY)
+
+    try:
+        while not rospy.is_shutdown():
+            linear_velocity = np.array([patroller.waypoint.position.x - patroller.patroller_pose.position.x, patroller.waypoint.position.y - patroller.patroller_pose.position.y])
+            distance = np.linalg.norm(linear_velocity)
+            print(distance)
+            rotation_angle = math.atan2(linear_velocity[1], linear_velocity[0])
+            patroller.rotate_in_place(rotation_angle)
+            patroller.move_forward(distance)
+    
+    except rospy.ROSInterruptException:
+        rospy.logerr("ROS node interrupted.")
+
+if __name__ == "__main__":
+    """Run the main function."""
+    main()
