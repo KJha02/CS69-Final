@@ -13,10 +13,10 @@ def handle_turtle_pose(msg, turtlename):
     print("sending transform")
     rate = rospy.Rate(FREQUENCY)
     while not rospy.is_shutdown():
-        br.sendTransform((msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z),
+        br.sendTransform((msg.pose.pose.position.x, msg.pose.pose.position.y, 0),
             (msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w),
             rospy.Time.now(),
-            turtlename + "/odom",
+            turtlename + "/base_link",
             "world")
 
 if __name__ == '__main__':

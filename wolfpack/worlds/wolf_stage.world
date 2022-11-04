@@ -30,38 +30,25 @@ window
 # throw multiple robots
 turtlebot
 (
-  pose [ -1.0 -1.0 0.0 0.0 ]
+  pose [ -6.0 0.0 0.0 0.0 ]
   name "rb_1"
   color "black"
 )
 turtlebot
 (
-  pose [ -1.0 0.0 0.0 0.0 ]
+  pose [ -6.0 6.0 0.0 0.0 ]
   name "rb_2"
   color "black"
 )
 turtlebot
 (
-  pose [ -1.0 1.0 0.0 0.0 ]
+  pose [ 0.0 6.0 0.0 0.0 ]
   name "rb_3"
   color "black"
 )
 turtlebot
 (
-  pose [ 1.0 1.0 0.0 0.0 ]
+  pose [ 0.0 0.0 0.0 0.0 ]
   name "rb_4"
-  color "black"
-)
-turtlebot
-(
-  pose [ 1.0 0.0 0.0 0.0 ]
-  name "rb_5"
-  color "black"
-)
-
-turtlebot
-(
-  pose [ 1.0 -1.0 0.0 0.0 ]
-  name "rb_6"
   color "black"
 )
