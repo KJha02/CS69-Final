@@ -2,8 +2,6 @@
 
 # d the the width of space in front of a robot that it can detect intruders in
 from random import randint
-import pdb
-
 
 d = .5
 # 0 = empty 2d x 2d square
@@ -84,7 +82,6 @@ def MakeCycle(mst):
   cycle = []
   curr = firstSmall
   while(curr not in cycle):
-    # pdb.set_trace()
     cycle.append(curr)
     (x,y) = curr
     isRight = x % 2 == 1
@@ -129,9 +126,4 @@ def MakeCycle(mst):
 
 grid = MakeGrid(map)
 mst = Kruskal(grid)
-print(mst)
 cycle = MakeCycle(mst)
-print(cycle)
-
-
-
