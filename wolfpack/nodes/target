@@ -1,27 +1,38 @@
 #!/usr/bin/env python
 
-# AUTHOR: Anna Mikhailova
+# AUTHOR: Anna Mikhailova - edits by Kunal Jha
 # CLASS: Multi-Robot Systems, 22F, Final Project
 
-# PURPOSE: a node for the target robot, which shares its location with the patroller robots 
+# PURPOSE: a node for the target robot, which shares its location with the patroller robots
 # once patrollers are in range of the target
 
 # --------------------------------------------------------------------------------------------------------------------------------------------------
 # import of relevant python modules and libraries
 import rospy
+import roslib
 import tf
 import re
 from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Twist, PointStamped # message type for cmd_vel
+import random
+import math
 
 # topic constants
 TGT_TOPIC = "/target"
+DEFAULT_CMD_VEL_TOPIC = "/cmd_vel"
 
 # constants
+# constants
 FREQUENCY = 10 #Hz.
+TGT_RANGE = 10 # range within which patrollers actually register target's position and commence flocking behaviour
+RADIUS = 5 # radius for surrounding behaviour
+ANGULAR_VELOCITY = math.pi/2  # rads/sec
+LINEAR_VELOCITY = 0.2 # m/s
+
 
 # --------------------------------------------------------------------------------------------------------------------------------------------------
 class Target:
-    def __init__(self):
+    def __init__(self, robot_name):
         # setting up location publisher
         self._target_pub = rospy.Publisher(TGT_TOPIC, Pose, queue_size=1)
 
@@ -29,45 +40,127 @@ class Target:
         self.listener = tf.TransformListener()
 
         # name of the target (for location purposes)
-        self.bot_name = "robot_" + str(int(re.search(r'\d+', rospy.get_namespace()).group())) 
+        # self.bot_name = "robot_" + str(int(re.search(r'\d+', rospy.get_namespace()).group()))
+        self.bot_name = robot_name
 
+        self._cmd_vel_pub = rospy.Publisher("/" + self.bot_name + DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
 
     # Method to retrive and return the current position of the target with respect to the world frame
     def retrieve_pose(self):
         target_pose = Pose() # initialize target position
 
         now = rospy.Time(0)
-        self.listener.waitForTransform("world", self.bot_name + "/odom", now, rospy.Duration(4.0))
+        self.listener.waitForTransform(self.bot_name + "/odom", "world", now, rospy.Duration(4.0))
 
         # get the transform and rotation matrices from tf listener
-        (trans, rot) = self.listener.lookupTransform("world", self.bot_name + "/odom", now)
+        (trans, rot) = self.listener.lookupTransform(self.bot_name + "/odom", "world", now)
 
         # populate the target position
         target_pose.position.x, target_pose.position.y = trans[0], trans[1]
 
+        print("Target's position is")
         print(target_pose.position.x, target_pose.position.y)
-    
+
         return target_pose
 
+
+    def random_walk(self):
+        rand_distance = random.uniform(0, 3)
+        rand_angle = random.uniform(-math.pi/2, math.pi/2)
+        print("Target random distance is")
+        print(rand_distance)
+        print("Target andom angle is")
+        print(rand_angle)
+        self.rotate_in_place(rand_angle)
+        self.move_forward(rand_distance)
+        self.rotate_in_place(-rand_angle)
+        self.stop()
+
+
+
+# --------------------------------------------------------------------------------------------------------------------------------------------------
+# MOVEMENT METHODS -- modelled on SimpleMotion
+# --------------------------------------------------------------------------------------------------------------------------------------------------
+    # Purpose: move forward the robot for a given distance
+    # Parameters: self, distance
+    def move_forward(self, distance):
+        # Rate at which to operate the while loop.
+        rate = rospy.Rate(FREQUENCY)
+
+        # Setting velocities.
+        twist_msg = Twist()
+        twist_msg.linear.x = LINEAR_VELOCITY
+        start_time = rospy.get_rostime()
+        duration = rospy.Duration(distance/twist_msg.linear.x)
+
+        # Loop.
+        while not rospy.is_shutdown():
+            # Check if traveled of given distance based on time.
+            if rospy.get_rostime() - start_time >= duration:
+                break
+
+            # Publish message.
+            self._cmd_vel_pub.publish(twist_msg)
+
+            # Sleep to keep the set publishing frequency.
+            rate.sleep()
+
+        # Traveled the required distance, stop.
+        self.stop()
+
+
+    # Purpose: rotate in place counterclockwise (unless otherwise specified), based on fixed velocity
+    # Parameters: rotation angle
+    def rotate_in_place(self, rotation_angle):
+        twist_msg = Twist()
+        twist_msg.angular.z = ANGULAR_VELOCITY
+        if rotation_angle < 0:
+            twist_msg.angular.z = -twist_msg.angular.z
+        duration = rotation_angle / twist_msg.angular.z
+
+        if duration < 0:
+            duration = -duration
+
+        start_time = rospy.get_rostime()
+        rate = rospy.Rate(FREQUENCY)
+
+        while not rospy.is_shutdown():
+            if rospy.get_rostime() - start_time >= rospy.Duration(duration):  # Check if done
+                break
+
+            self._cmd_vel_pub.publish(twist_msg)  # Publish message.
+            rate.sleep()  # Sleep to keep the set frequency.
+
+        self.stop()  # Rotated the required angle, stop.
+
+
+    # Purpose: stops bot movement
+    # Parameters: self
+    def stop(self):
+        twist_msg = Twist()
+        self._cmd_vel_pub.publish(twist_msg)
 
 
 def main():
     # 1st. initialization of node.
     rospy.init_node("target")
+    robot_name = rospy.get_param("robot_name")  # get relative param for name
 
     # Sleep for a few seconds to wait for the registration.
     rospy.sleep(2)
 
     # Initialization of the class for the simple motion.
-    target = Target()
+    target = Target(robot_name)
 
     rospy.sleep(4)
     rate = rospy.Rate(FREQUENCY)
 
     try:
         while not rospy.is_shutdown(): #-- implement while loop later on when we don't have a stationary target
+            target.random_walk()
             msg = Pose() # create a pose message that will store the position of the target
             msg = target.retrieve_pose()
+
             rospy.sleep(2)
             target._target_pub.publish(msg) # publish the position of the target
 
@@ -77,4 +170,4 @@ def main():
 
 if __name__ == "__main__":
     """Run the main function."""
-    main()      
+    main()

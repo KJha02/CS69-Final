@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# AUTHOR: Kunal Jha - Anna Mikhailova
+
 # --------------------------------------------------------------------------------------------------------------------------------------------------
 # import of relevant python modules and libraries
 import rospy
@@ -16,17 +18,18 @@ roslib.load_manifest("wolfpack")
 
 # topic constants
 TGT_TOPIC = "/target"
-DEFAULT_CMD_VEL_TOPIC = "cmd_vel"
+DEFAULT_CMD_VEL_TOPIC = "/cmd_vel"
 DEFAULT_ODOM_TOPIC = "/odom"
 DEFAULT_BASE_LINK = "/base_link"
 DEFAULT_PATROL_NAME = "/patrol"
 
 # constants
-FREQUENCY = 5 #Hz.
+FREQUENCY = 10 #Hz.
 TGT_RANGE = 10 # range within which patrollers actually register target's position and commence flocking behaviour
 RADIUS = 5 # radius for surrounding behaviour
 ANGULAR_VELOCITY = math.pi/2  # rads/sec
 LINEAR_VELOCITY = 0.2 # m/s
+VELOCITY_SCALE = 1
 
 # parameters
 NUM_BOTS = rospy.get_param("num_bots", 3)
@@ -54,8 +57,8 @@ class Patroller:
         self.patrol_path = []
         self.robot_loc = None
 
-        # initializing cmd_vel_pub and patrol publisher
-        self.cmd_vel_pub = rospy.Publisher("/" + self.robot_name + DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
+        # initializing _cmd_vel_pub and patrol publisher
+        self._cmd_vel_pub = rospy.Publisher("/" + self.robot_name + DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
         self.patrol_sub = rospy.Subscriber("/" + self.robot_name + DEFAULT_PATROL_NAME, CoordArray, self.patrol_cb)
         self.listener = tf.TransformListener()
 
@@ -74,17 +77,20 @@ class Patroller:
         waypoint_stamped.header.frame_id = 'world'
         waypoint_stamped.point.x = waypoint[0]
         waypoint_stamped.point.y = waypoint[1]
-        return self.listener.transformPoint(self.robot_name + DEFAULT_BASE_LINK, waypoint_stamped)
+        return self.listener.transformPoint(self.robot_name + DEFAULT_ODOM_TOPIC, waypoint_stamped)
 
     def patrol(self):
         if len(self.patrol_path) > 0:  # non empty patrol path
             for target in self.patrol_path:
+                self.robot_loc = (0, 0)  # making calculations from robot's perspective
+
                 coords = self.get_transformed_point(target)
                 coords = [coords.point.x, coords.point.y]
-                self.robot_loc = (0, 0)  # making calculations from robot's perspective
+
 
                 vx, vy = coords[0] - self.robot_loc[0], coords[1] - self.robot_loc[1]
                 dist = euclid_dist(coords[0], coords[1], 0, 0)
+                # dist = euclid_dist(coords[0], coords[1], self.robot_loc[0], self.robot_loc[1])
 
                 # normalize velocity
                 if dist != 0:
@@ -117,7 +123,7 @@ class Patroller:
         # Rate at which to operate the while loop.
         rate = rospy.Rate(FREQUENCY)
 
-        # Setting velocities. 
+        # Setting velocities.
         twist_msg = Twist()
         twist_msg.linear.x = LINEAR_VELOCITY
         start_time = rospy.get_rostime()
@@ -136,20 +142,18 @@ class Patroller:
             rate.sleep()
 
         # Traveled the required distance, stop.
-        self.stop()  
+        self.stop()
 
 
     # Purpose: rotate in place counterclockwise (unless otherwise specified), based on fixed velocity
     # Parameters: rotation angle
-    def rotate_in_place(self, rotation_angle):
+    def rotate_in_place(self, rotation_angle, clockwise):
         twist_msg = Twist()
+        rotation_angle = abs(rotation_angle)
         twist_msg.angular.z = ANGULAR_VELOCITY
-        if rotation_angle < 0:
-            twist_msg.angular.z = -twist_msg.angular.z
         duration = rotation_angle / twist_msg.angular.z
-
-        if duration < 0:
-            duration = -duration
+        if clockwise:
+            twist_msg.angular.z = -twist_msg.angular.z
 
         start_time = rospy.get_rostime()
         rate = rospy.Rate(FREQUENCY)
@@ -165,10 +169,10 @@ class Patroller:
 
 
     # Purpose: stops bot movement
-    # Parameters: self    
+    # Parameters: self
     def stop(self):
         twist_msg = Twist()
-        self.cmd_vel_pub.publish(twist_msg)
+        self._cmd_vel_pub.publish(twist_msg)
 
 
 # --------------------------------------------------------------------------------------------------------------------------------------------------
@@ -183,12 +187,7 @@ def main():
     # try:
     rate = rospy.Rate(FREQUENCY)
     while not rospy.is_shutdown():
-        if robot_name == "robot_3":
-            print(patroller.patrol_path)
-        try:
-            patroller.patrol()
-        except:
-            print("The patroller failed")
+        patroller.patrol()
         rate.sleep()
 
 
