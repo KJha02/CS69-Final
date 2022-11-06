@@ -1,25 +1,38 @@
 #!/usr/bin/env python
-import roslib
-roslib.load_manifest('coordination')
+
+# --------------------------------------------------------------------------------------------------------------------------------------------------
+# import of relevant python modules and libraries
 import rospy
-import math
-import numpy as np
+import roslib
 import tf
-import geometry_msgs.msg
+import re
+import numpy as np
+import math
+from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Twist, PointStamped # message type for cmd_vel
-from wolfpack.msg import calcWays, CoordArray, FloatList
-from nav_msgs.msg import Odometry
-from tf.transformations import euler_from_quaternion
+from wolfpack.msg import CoordArray
 
+roslib.load_manifest("wolfpack")
 
-DEFAULT_CMD_VEL_TOPIC = '/cmd_vel'
-FREQUENCY = 5
-ANGULAR_VELOCITY = math.pi/2 # rad/s
-DEFAULT_ODOM_TOPIC = '/odom'
-DEFAULT_BASE_LINK = '/base_link'
-DEFAULT_PATROL_NAME = '/patrol'
-VELOCITY_SCALE = 0.2
+# topic constants
+TGT_TOPIC = "/target"
+DEFAULT_CMD_VEL_TOPIC = "cmd_vel"
+DEFAULT_ODOM_TOPIC = "/odom"
+DEFAULT_BASE_LINK = "/base_link"
+DEFAULT_PATROL_NAME = "/patrol"
 
+# constants
+FREQUENCY = 5 #Hz.
+TGT_RANGE = 10 # range within which patrollers actually register target's position and commence flocking behaviour
+RADIUS = 5 # radius for surrounding behaviour
+ANGULAR_VELOCITY = math.pi/2  # rads/sec
+LINEAR_VELOCITY = 0.2 # m/s
+
+# parameters
+NUM_BOTS = rospy.get_param("num_bots", 3)
+
+# --------------------------------------------------------------------------------------------------------------------------------------------------
+# SOME HELPER METHODS
 def euclid_dist(x1, y1, x2, y2):
     return ((x1-x2)**2 + (y1-y2)**2)**0.5
 
@@ -32,7 +45,8 @@ def angle_between(v1, v2):
     v2_u = unit_vector(v2)
     return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
 
-class Follower:
+# --------------------------------------------------------------------------------------------------------------------------------------------------
+class Patroller:
     def __init__(self, robot_name):
         self.robot_name = robot_name
         self.rate = rospy.Rate(FREQUENCY)
@@ -40,6 +54,7 @@ class Follower:
         self.patrol_path = []
         self.robot_loc = None
 
+        # initializing cmd_vel_pub and patrol publisher
         self.cmd_vel_pub = rospy.Publisher("/" + self.robot_name + DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
         self.patrol_sub = rospy.Subscriber("/" + self.robot_name + DEFAULT_PATROL_NAME, CoordArray, self.patrol_cb)
         self.listener = tf.TransformListener()
@@ -93,12 +108,18 @@ class Follower:
                 self.rate.sleep()
 
 
+# --------------------------------------------------------------------------------------------------------------------------------------------------
+# MOVEMENT METHODS -- modelled on SimpleMotion
+# --------------------------------------------------------------------------------------------------------------------------------------------------
+    # Purpose: move forward the robot for a given distance
+    # Parameters: self, distance
     def move_forward(self, distance):
-        """Function to move_forward for a given distance."""
         # Rate at which to operate the while loop.
-        # Setting velocities.
+        rate = rospy.Rate(FREQUENCY)
+
+        # Setting velocities. 
         twist_msg = Twist()
-        twist_msg.linear.x = VELOCITY_SCALE
+        twist_msg.linear.x = LINEAR_VELOCITY
         start_time = rospy.get_rostime()
         duration = rospy.Duration(distance/twist_msg.linear.x)
 
@@ -107,65 +128,73 @@ class Follower:
             # Check if traveled of given distance based on time.
             if rospy.get_rostime() - start_time >= duration:
                 break
-            self.cmd_vel_pub.publish(twist_msg)
-
-            # Sleep to keep the set publishing frequency.
-            self.rate.sleep()
-
-        # Traveled the required distance, stop.
-        self.stop()
-    def rotate_in_place(self, rotation_angle, clockwise=False):
-        """
-        Rotate in place the robot of rotation_angle (rad) based on fixed velocity.
-        Assumption: Counterclockwise rotation
-        """
-        twist_msg = Twist()
-        twist_msg.angular.z = ANGULAR_VELOCITY
-        rotation_angle = abs(rotation_angle)
-        duration = rotation_angle / twist_msg.angular.z
-        if clockwise:  # clockwise has the same motion as counterclockwise just in the opposite direction
-            twist_msg.angular.z = -twist_msg.angular.z
-        start_time = rospy.get_rostime()
-        while not rospy.is_shutdown():
-            # Check if done
-            if rospy.get_rostime() - start_time >= rospy.Duration(duration):
-                break
 
             # Publish message.
-            self.cmd_vel_pub.publish(twist_msg)
+            self._cmd_vel_pub.publish(twist_msg)
 
-            # Sleep to keep the set frequency.
-            self.rate.sleep()
-        # Rotated the required angle, stop.
-        self.stop()
+            # Sleep to keep the set publishing frequency.
+            rate.sleep()
+
+        # Traveled the required distance, stop.
+        self.stop()  
+
+
+    # Purpose: rotate in place counterclockwise (unless otherwise specified), based on fixed velocity
+    # Parameters: rotation angle
+    def rotate_in_place(self, rotation_angle):
+        twist_msg = Twist()
+        twist_msg.angular.z = ANGULAR_VELOCITY
+        if rotation_angle < 0:
+            twist_msg.angular.z = -twist_msg.angular.z
+        duration = rotation_angle / twist_msg.angular.z
+
+        if duration < 0:
+            duration = -duration
+
+        start_time = rospy.get_rostime()
+        rate = rospy.Rate(FREQUENCY)
+
+        while not rospy.is_shutdown():
+            if rospy.get_rostime() - start_time >= rospy.Duration(duration):  # Check if done
+                break
+
+            self._cmd_vel_pub.publish(twist_msg)  # Publish message.
+            rate.sleep()  # Sleep to keep the set frequency.
+
+        self.stop()  # Rotated the required angle, stop.
+
+
+    # Purpose: stops bot movement
+    # Parameters: self    
     def stop(self):
-        """Stop the robot."""
         twist_msg = Twist()
         self.cmd_vel_pub.publish(twist_msg)
 
 
+# --------------------------------------------------------------------------------------------------------------------------------------------------
+# MAIN METHOD
+# --------------------------------------------------------------------------------------------------------------------------------------------------
 def main():
     robot_name = rospy.get_param("robot_name")  # get relative param for name
     print(robot_name)
-    follower = Follower(robot_name)
-    print("initialized follower")
+    patroller = Patroller(robot_name)
+    print("initialized patroller")
 
     # try:
     rate = rospy.Rate(FREQUENCY)
     while not rospy.is_shutdown():
         if robot_name == "robot_3":
-            print(follower.patrol_path)
+            print(patroller.patrol_path)
         try:
-            follower.patrol()
+            patroller.patrol()
         except:
-            print("The follower failed")
+            print("The patroller failed")
         rate.sleep()
-    # except rospy.ROSInterruptException:
-    #     rospy.logerr("ROS node interrupted.")
+
 
 if __name__ == "__main__":
     # 1st. initialization of node.
-    rospy.init_node("follower_agent")
+    rospy.init_node("patroller")
     # Sleep for a few seconds to wait for the registration.
     print("sleeping")
     rospy.sleep(7)
