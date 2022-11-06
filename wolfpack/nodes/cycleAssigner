@@ -12,6 +12,19 @@ FREQUENCY = 10
 
 class Assigner:
     def __init__(self, numRobots, cycle):
+        self.wall_locations = set([])
+        # horizontal locations hard coded in
+        for wall in [[-4.0, 3.0], [-2.0, -1.0], [-5.0, -4.0], [3.0, 5.0], [5.0, 5.0], [4.0, 0.0], [5.0, 0.0]]:
+            self.wall_locations.add(tuple(wall))
+            self.wall_locations.add((wall[0]-1, wall[1]))
+            self.wall_locations.add((wall[0]+1, wall[1]))
+        # vertical locations hard coded in
+        for wall in [[-3.0, 2.0], [3.0, -2.0], [3.0, -4.0], [-2.0, -1.0], [-5.0, -3.0]]:
+            self.wall_locations.add(tuple(wall))
+            self.wall_locations.add((wall[0], wall[1]-1))
+            self.wall_locations.add((wall[0], wall[1]+1))
+
+
         self.numRobots = numRobots
         self.rate = rospy.Rate(FREQUENCY)
 
@@ -49,13 +62,14 @@ class Assigner:
                 down = y > lower_y
                 right = x < upper_x
                 left = x > lower_x
-                if (up):  # adding neighbors if in bounds
+                # adding neighbors if in bounds and not an obstacle
+                if (up) and (x, y+1) not in self.wall_locations:
                     G.add_edge((x,y), (x, y+1), weight=1)
-                if (down):
+                if (down) and (x, y-1) not in self.wall_locations:
                     G.add_edge((x,y), (x, y-1), weight=1)
-                if (left):
+                if (left) and (x-1, y) not in self.wall_locations:
                     G.add_edge((x,y), (x-1, y), weight=1)
-                if (right):
+                if (right) and (x+1, y) not in self.wall_locations:
                     G.add_edge((x,y), (x+1, y), weight=1)
 
         mst = minimum_spanning_tree(G)  # get mst from graph using kruskal's algorithm by default
@@ -97,6 +111,7 @@ class Assigner:
                     curr = (x, y+1)
                 else:  # go left if tree goes left
                     curr = (x-1, y)
+        print(cycle)
         return cycle
 
     def publish_paths(self):
