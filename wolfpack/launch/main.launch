@@ -31,6 +31,11 @@
       <param name="robot_name" value="robot_3" />
       <remap from="base_scan" to="scan" />
     </group>
+    <group ns= "robot_4">
+      <param name="robot_name" value="robot_4" />
+      <remap from="base_scan" to="scan" />
+    </group>
+
 
     <node name="robot_0_tf_broadcaster" pkg="wolfpack" type="broadcaster" respawn="false" output="screen" >
       <param name="turtle" type="string" value="robot_0" />
@@ -43,6 +48,9 @@
     </node>
     <node name="robot_3_tf_broadcaster" pkg="wolfpack" type="broadcaster" respawn="false" output="screen" >
       <param name="turtle" type="string" value="robot_3" />
+    </node>
+    <node name="robot_4_tf_broadcaster" pkg="wolfpack" type="broadcaster" respawn="false" output="screen" >
+      <param name="turtle" type="string" value="robot_4" />
     </node>
 
     <node name="robot_0_init_pose" pkg="wolfpack" type="initposes" respawn="false" output="screen" >
@@ -67,6 +75,12 @@
       <param name="turtle" type="string" value="robot_3" />
       <param name= "x_pos" value="0.0"/>
       <param name= "y_pos" value="0.0"/>
+      <param name= "z_pos" value="0.0"/>
+    </node>
+    <node name="robot_4_init_pose" pkg="wolfpack" type="initposes" respawn="false" output="screen" >
+      <param name="turtle" type="string" value="robot_4" />
+      <param name= "x_pos" value="2.0"/>
+      <param name= "y_pos" value="2.0"/>
       <param name= "z_pos" value="0.0"/>
     </node>
 

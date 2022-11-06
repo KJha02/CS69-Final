@@ -52,3 +52,9 @@ turtlebot
   name "rb_4"
   color "black"
 )
+turtlebot
+(
+  pose [ 2.0 2.0 0.0 0.0 ]
+  name "rb_5"
+  color "black"
+)
