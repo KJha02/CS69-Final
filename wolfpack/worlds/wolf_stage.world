@@ -1,5 +1,17 @@
 include "turtlebot.inc"
 
+define horzBlock model
+(
+  size [1.0 0.5 0.5]
+  gui_nose 0
+)
+
+define vertBlock model
+(
+  size [0.5 1.0 0.5]
+  gui_nose 0
+)
+
 define floorplan model
 (
   # sombre, sensible, artistic
@@ -32,29 +44,58 @@ turtlebot
 (
   pose [ -6.0 0.0 0.0 0.0 ]
   name "rb_1"
-  color "black"
+  color "blue"
 )
 turtlebot
 (
   pose [ -6.0 6.0 0.0 0.0 ]
   name "rb_2"
-  color "black"
+  color "blue"
 )
 turtlebot
 (
   pose [ 0.0 6.0 0.0 0.0 ]
   name "rb_3"
-  color "black"
+  color "blue"
 )
 turtlebot
 (
   pose [ 0.0 0.0 0.0 0.0 ]
   name "rb_4"
-  color "black"
+  color "blue"
 )
 turtlebot
 (
   pose [ 2.0 2.0 0.0 0.0 ]
   name "rb_5"
-  color "black"
+  color "red"
 )
+
+# making obstacles
+horzBlock( pose [ -1.0 3.0 0 180.000 ] color "black")
+horzBlock( pose [ -2.0 3.0 0 180.000 ] color "black")
+vertBlock( pose [ -1.50 3.75 0 180.000 ] color "black")
+vertBlock( pose [ -1.50 2.25 0 180.000 ] color "black")
+
+vertBlock( pose [ 3.00 -2.5 0 180.000 ] color "black")
+vertBlock( pose [ 3.00 -3.5 0 180.000 ] color "black")
+vertBlock( pose [ 3.00 -4.5 0 180.000 ] color "black")
+
+
+horzBlock( pose [ -2.0 -1.0 0 180.000 ] color "black")
+horzBlock( pose [ -3.0 -1.0 0 180.000 ] color "black")
+vertBlock( pose [ -2.25 -1.75 0 180.000 ] color "black")
+
+
+horzBlock( pose [ -4.0 -4.0 0 180.000 ] color "black")
+horzBlock( pose [ -5.0 -4.0 0 180.000 ] color "black")
+vertBlock( pose [ -5.25 -3.25 0 180.000 ] color "black")
+
+
+horzBlock( pose [ 3.00 5.0 0 180.000 ] color "black")
+horzBlock( pose [ 4.00 5.0 0 180.000 ] color "black")
+horzBlock( pose [ 5.00 5.0 0 180.000 ] color "black")
+horzBlock( pose [ 6.00 5.0 0 180.000 ] color "black")
+
+horzBlock( pose [ 4.5 0.0 0 180.000 ] color "black")
+horzBlock( pose [ 5.5 0.0 0 180.000 ] color "black")
