@@ -50,10 +50,10 @@ class Target:
         target_pose = Pose() # initialize target position
 
         now = rospy.Time(0)
-        self.listener.waitForTransform(self.bot_name + "/odom", "world", now, rospy.Duration(4.0))
+        self.listener.waitForTransform(self.bot_name + "/base_link", "world", now, rospy.Duration(4.0))
 
         # get the transform and rotation matrices from tf listener
-        (trans, rot) = self.listener.lookupTransform(self.bot_name + "/odom", "world", now)
+        (trans, rot) = self.listener.lookupTransform(self.bot_name + "/base_link", "world", now)
 
         # populate the target position
         target_pose.position.x, target_pose.position.y = trans[0], trans[1]
@@ -69,7 +69,7 @@ class Target:
         rand_angle = random.uniform(-math.pi/2, math.pi/2)
         print("Target random distance is")
         print(rand_distance)
-        print("Target andom angle is")
+        print("Target random angle is")
         print(rand_angle)
         self.rotate_in_place(rand_angle)
         self.move_forward(rand_distance)
