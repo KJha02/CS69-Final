@@ -27,9 +27,9 @@ DEFAULT_PATROL_NAME = "/patrol"
 FREQUENCY = 10 #Hz.
 TGT_RANGE = 10 # range within which patrollers actually register target's position and commence flocking behaviour
 RADIUS = 5 # radius for surrounding behaviour
-ANGULAR_VELOCITY = math.pi/2  # rads/sec
-LINEAR_VELOCITY = 0.2 # m/s
-VELOCITY_SCALE = 1
+ANGULAR_VELOCITY = math.pi/4  # rads/sec
+LINEAR_VELOCITY = 0.1 # m/s
+VELOCITY_SCALE = 0.1
 
 # parameters
 NUM_BOTS = rospy.get_param("num_bots", 3)
@@ -70,6 +70,8 @@ class Patroller:
         for coords in msg.coords:  # we have FloatLists here
             target = coords.elements
             path.append(target)
+        if self.robot_name == "robot_1":
+            print(path)
         self.patrol_path = path  # doing this incase the patrol function is called before callback finishes
 
     def get_transformed_point(self, waypoint):
@@ -77,7 +79,10 @@ class Patroller:
         waypoint_stamped.header.frame_id = 'world'
         waypoint_stamped.point.x = waypoint[0]
         waypoint_stamped.point.y = waypoint[1]
-        return self.listener.transformPoint(self.robot_name + DEFAULT_ODOM_TOPIC, waypoint_stamped)
+        return self.listener.transformPoint(self.robot_name + DEFAULT_BASE_LINK, waypoint_stamped)
+
+    def surround(self):
+        return
 
     def patrol(self):
         if len(self.patrol_path) > 0:  # non empty patrol path
@@ -110,7 +115,6 @@ class Patroller:
                 self.rotate_in_place(angle, clockwise)  # move
                 self.move_forward(dist)  # move
                 self.rotate_in_place(angle, not clockwise) # rotating back to original face
-                rospy.sleep(10)
                 self.rate.sleep()
 
 
@@ -187,6 +191,8 @@ def main():
     # try:
     rate = rospy.Rate(FREQUENCY)
     while not rospy.is_shutdown():
+        if robot_name == "robot_1":
+            print(patroller.patrol_path)
         patroller.patrol()
         rate.sleep()
 
