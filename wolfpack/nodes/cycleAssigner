@@ -35,7 +35,6 @@ class Assigner:
             self.assigned_path[i] = self.makeCycle(i)
             self.patrol_publishers[i] = rospy.Publisher('/robot_' + str(i) + '/patrol', CoordArray, queue_size=1)
 
-
     def makeCycle(self, robot_id):
         # restricting robot movement
         if robot_id == 1 or robot_id == 2:
@@ -60,13 +59,13 @@ class Assigner:
                 right = x < upper_x
                 left = x > lower_x
                 # adding neighbors if in bounds and not an obstacle
-                if (up) and (x, y+1) not in self.wall_locations:
+                if (up):
                     G.add_edge((x,y), (x, y+1), weight=1)
-                if (down) and (x, y-1) not in self.wall_locations:
+                if (down):
                     G.add_edge((x,y), (x, y-1), weight=1)
-                if (left) and (x-1, y) not in self.wall_locations:
+                if (left) and (x-1, y):
                     G.add_edge((x,y), (x-1, y), weight=1)
-                if (right) and (x+1, y) not in self.wall_locations:
+                if (right) and (x+1, y):
                     G.add_edge((x,y), (x+1, y), weight=1)
 
         mst = minimum_spanning_tree(G)  # get mst from graph using kruskal's algorithm by default
@@ -79,36 +78,37 @@ class Assigner:
         cycle = []
         curr = firstSmall
         while (curr not in cycle):
-            cycle.append(curr)
-            (x, y) = curr
-            isRight = x % 2 == 1
-            isBottom = y % 2 == 0
-            this_big = smallToBig(x, y)
-            if (this_big in mst.adj):  # if we have reached a valid coord
-                if (not isRight and not isBottom):  # top left
-                    up_big = (this_big[0], this_big[1] + 1)
-                    if (up_big not in mst.adj[this_big]):  # go right, but only if tree isn't up
-                        curr = (x+1, y)
-                    else:  # go up if tree goes up
-                        curr = (x, y+1)
-                elif (isRight and not isBottom):  # top right
-                    right_big = (this_big[0] + 1, this_big[1])
-                    if (right_big not in mst.adj[this_big]):  # go down only if right isn't coveren't
-                        curr = (x, y-1)
-                    else:  # go right if tree goes right
-                        curr = (x+1, y)
-                elif (isRight and isBottom):  # bottom right
-                    down_big = (this_big[0], this_big[1] - 1)
-                    if (down_big not in mst.adj[this_big]):  #   # go left if tree doesn't go down
-                        curr = (x-1, y)
-                    else:  # go down if tree goes down
-                        curr = (x, y-1)
-                else:  # bottom right
-                    left_big = (this_big[0] - 1, this_big[1])
-                    if (left_big not in mst.adj[this_big]):  # go up if tree doesn't go left
-                        curr = (x, y+1)
-                    else:  # go left if tree goes left
-                        curr = (x-1, y)
+            if True:
+                cycle.append(curr)
+                (x, y) = curr
+                isRight = x % 2 == 1
+                isBottom = y % 2 == 0
+                this_big = smallToBig(x, y)
+                if (this_big in mst.adj):  # if we have reached a valid coord
+                    if (not isRight and not isBottom):  # top left
+                        up_big = (this_big[0], this_big[1] + 1)
+                        if (up_big not in mst.adj[this_big]):  # go right, but only if tree isn't up
+                            curr = (x+1, y)
+                        else:  # go up if tree goes up
+                            curr = (x, y+1)
+                    elif (isRight and not isBottom):  # top right
+                        right_big = (this_big[0] + 1, this_big[1])
+                        if (right_big not in mst.adj[this_big]):  # go down only if right isn't coveren't
+                            curr = (x, y-1)
+                        else:  # go right if tree goes right
+                            curr = (x+1, y)
+                    elif (isRight and isBottom):  # bottom right
+                        down_big = (this_big[0], this_big[1] - 1)
+                        if (down_big not in mst.adj[this_big]):  #   # go left if tree doesn't go down
+                            curr = (x-1, y)
+                        else:  # go down if tree goes down
+                            curr = (x, y-1)
+                    else:  # bottom right
+                        left_big = (this_big[0] - 1, this_big[1])
+                        if (left_big not in mst.adj[this_big]):  # go up if tree doesn't go left
+                            curr = (x, y+1)
+                        else:  # go left if tree goes left
+                            curr = (x-1, y)
         return cycle
 
     def publish_paths(self):
