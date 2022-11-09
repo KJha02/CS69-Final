@@ -1,0 +1,101 @@
+include "turtlebot.inc"
+
+define obstacle model
+(
+  size [1.0 1.0 0.5]
+  gui_nose 0
+)
+
+define floorplan model
+(
+  # sombre, sensible, artistic
+  color "gray30"
+
+  # most maps will need a bounding box
+  boundary 1
+
+  gui_nose 0
+  gui_grid 0
+  gui_outline 0
+  gripper_return 0
+  fiducial_return 0
+  laser_return 1
+)
+
+resolution 0.02
+interval_sim 100  # simulation timestep in milliseconds
+
+window
+(
+  size [ 600.0 700.0 ]
+  center [ 0.0 0.0 ]
+  rotate [ 0.0 0.0 ]
+  scale 60
+)
+
+# throw multiple robots
+turtlebot
+(
+  pose [ -6.0 0.0 0.0 0.0 ]
+  name "rb_1"
+  color "blue"
+)
+turtlebot
+(
+  pose [ -6.0 6.0 0.0 0.0 ]
+  name "rb_2"
+  color "blue"
+)
+turtlebot
+(
+  pose [ 0.0 6.0 0.0 0.0 ]
+  name "rb_3"
+  color "blue"
+)
+turtlebot
+(
+  pose [ 0.0 0.0 0.0 0.0 ]
+  name "rb_4"
+  color "blue"
+)
+turtlebot
+(
+  pose [ 2.0 2.0 0.0 0.0 ]
+  name "rb_5"
+  color "red"
+)
+
+# making obstacles
+
+# quadrant 1
+obstacle ( pose [ 7.5 8.5 0 180.000] color "pink")
+obstacle ( pose [ 8.5 9.5 0 180.000] color "pink")
+obstacle ( pose [ 9.5 9.5 0 180.000] color "pink")
+obstacle ( pose [ 10.5 9.5 0 180.000] color "pink")
+obstacle ( pose [ 10.5 8.5 0 180.000] color "pink")
+obstacle ( pose [ 10.5 7.5 0 180.000] color "pink")
+obstacle ( pose [ 10.5 6.5 0 180.000] color "pink")
+
+
+# quadrant 2
+obstacle ( pose [ 4.5 7.5 0 180.000] color "purple")
+obstacle ( pose [ 4.5 8.5 0 180.000] color "purple")
+obstacle ( pose [ 4.5 9.5 0 180.000] color "purple")
+obstacle ( pose [ 4.5 10.5 0 180.000] color "purple")
+
+# quadrant 3
+obstacle ( pose [ 1.5 3.5 0 180.000] color "magenta")
+obstacle ( pose [ 2.5 3.5 0 180.000] color "magenta")
+obstacle ( pose [ 2.5 4.5 0 180.000] color "magenta")
+obstacle ( pose [ 3.5 4.5 0 180.000] color "magenta")
+obstacle ( pose [ 4.5 1.5 0 180.000] color "magenta")
+obstacle ( pose [ 4.5 2.5 0 180.000] color "magenta")
+
+# quadrant 4
+obstacle ( pose [ 7.5 3.5 0 180.000] color "lilac")
+obstacle ( pose [ 8.5 3.5 0 180.000] color "lilac")
+obstacle ( pose [ 9.5 3.5 0 180.000] color "lilac")
+obstacle ( pose [ 10.5 3.5 0 180.000] color "lilac")
+obstacle ( pose [ 10.5 2.5 0 180.000] color "lilac")
+obstacle ( pose [ 10.5 4.5 0 180.000] color "lilac")
+obstacle ( pose [ 9.5 4.5 0 180.000] color "lilac")
