@@ -24,10 +24,13 @@ DEFAULT_CMD_VEL_TOPIC = "/cmd_vel"
 # constants
 # constants
 FREQUENCY = 10 #Hz.
-TGT_RANGE = 10 # range within which patrollers actually register target's position and commence flocking behaviour
+TGT_RANGE = 2 # range within which patrollers actually register target's position and commence flocking behaviour
 RADIUS = 5 # radius for surrounding behaviour
-ANGULAR_VELOCITY = math.pi/2  # rads/sec
-LINEAR_VELOCITY = 0.2 # m/s
+ANGULAR_VELOCITY = math.pi/4  # rads/sec
+LINEAR_VELOCITY = 0.1 # m/s
+
+def euclid_dist(x1, y1, x2, y2):
+    return ((x1-x2)**2 + (y1-y2)**2)**0.5
 
 
 # --------------------------------------------------------------------------------------------------------------------------------------------------
@@ -49,28 +52,26 @@ class Target:
     def retrieve_pose(self):
         target_pose = Pose() # initialize target position
 
-        now = rospy.Time(0)
-        self.listener.waitForTransform(self.bot_name + "/base_link", "world", now, rospy.Duration(4.0))
+        self.listener.waitForTransform("world", self.bot_name + "/base_link", rospy.Time(0), rospy.Duration(4.0))
 
         # get the transform and rotation matrices from tf listener
-        (trans, rot) = self.listener.lookupTransform(self.bot_name + "/base_link", "world", now)
+        (trans, rot) = self.listener.lookupTransform("world", self.bot_name + "/base_link",  rospy.Time(0))
 
         # populate the target position
         target_pose.position.x, target_pose.position.y = trans[0], trans[1]
-
-        print("Target's position is")
-        print(target_pose.position.x, target_pose.position.y)
-
         return target_pose
 
 
     def random_walk(self):
-        rand_distance = random.uniform(0, 3)
-        rand_angle = random.uniform(-math.pi/2, math.pi/2)
-        print("Target random distance is")
-        print(rand_distance)
-        print("Target random angle is")
-        print(rand_angle)
+        self.listener.waitForTransform("world", self.bot_name + "/base_link", rospy.Time(0), rospy.Duration(4.0))
+        # get the transform and rotation matrices from tf listener
+        (trans, rot) = self.listener.lookupTransform("world", self.bot_name + "/base_link",  rospy.Time(0))
+
+
+        rand_x = random.uniform(-6, 6)
+        rand_y = random.uniform(-6, 6)
+        rand_distance = euclid_dist(rand_x, rand_y, trans[0], trans[1])
+        rand_angle = math.atan2(rand_y - trans[1], rand_x - trans[0])
         self.rotate_in_place(rand_angle)
         self.move_forward(rand_distance)
         self.rotate_in_place(-rand_angle)
@@ -92,6 +93,7 @@ class Target:
         twist_msg.linear.x = LINEAR_VELOCITY
         start_time = rospy.get_rostime()
         duration = rospy.Duration(distance/twist_msg.linear.x)
+        msg = Pose() # create a pose message that will store the position of the target
 
         # Loop.
         while not rospy.is_shutdown():
@@ -101,6 +103,8 @@ class Target:
 
             # Publish message.
             self._cmd_vel_pub.publish(twist_msg)
+            msg = self.retrieve_pose()
+            self._target_pub.publish(msg) # publish the position of the target
 
             # Sleep to keep the set publishing frequency.
             rate.sleep()
@@ -112,6 +116,7 @@ class Target:
     # Purpose: rotate in place counterclockwise (unless otherwise specified), based on fixed velocity
     # Parameters: rotation angle
     def rotate_in_place(self, rotation_angle):
+        msg = Pose() # create a pose message that will store the position of the target
         twist_msg = Twist()
         twist_msg.angular.z = ANGULAR_VELOCITY
         if rotation_angle < 0:
@@ -129,6 +134,8 @@ class Target:
                 break
 
             self._cmd_vel_pub.publish(twist_msg)  # Publish message.
+            msg = self.retrieve_pose()
+            self._target_pub.publish(msg) # publish the position of the target
             rate.sleep()  # Sleep to keep the set frequency.
 
         self.stop()  # Rotated the required angle, stop.
@@ -158,11 +165,7 @@ def main():
     try:
         while not rospy.is_shutdown(): #-- implement while loop later on when we don't have a stationary target
             target.random_walk()
-            msg = Pose() # create a pose message that will store the position of the target
-            msg = target.retrieve_pose()
-
             rospy.sleep(2)
-            target._target_pub.publish(msg) # publish the position of the target
 
 
     except rospy.ROSInterruptException:

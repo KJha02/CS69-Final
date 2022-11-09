@@ -12,7 +12,7 @@ import numpy as np
 import math
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Twist, PointStamped # message type for cmd_vel
-from wolfpack.msg import CoordArray
+from wolfpack.msg import CoordArray, FloatList, calcWays
 
 roslib.load_manifest("wolfpack")
 
@@ -22,10 +22,11 @@ DEFAULT_CMD_VEL_TOPIC = "/cmd_vel"
 DEFAULT_ODOM_TOPIC = "/odom"
 DEFAULT_BASE_LINK = "/base_link"
 DEFAULT_PATROL_NAME = "/patrol"
+DEFAULT_DISCOVERED_NAME = "/foundT"
 
 # constants
 FREQUENCY = 10 #Hz.
-TGT_RANGE = 10 # range within which patrollers actually register target's position and commence flocking behaviour
+TGT_RANGE = 2 # range within which patrollers actually register target's position and commence flocking behaviour
 RADIUS = 5 # radius for surrounding behaviour
 ANGULAR_VELOCITY = math.pi/4  # rads/sec
 LINEAR_VELOCITY = 0.1 # m/s
@@ -50,8 +51,9 @@ def angle_between(v1, v2):
 
 # --------------------------------------------------------------------------------------------------------------------------------------------------
 class Patroller:
-    def __init__(self, robot_name):
+    def __init__(self, robot_name, numRobots):
         self.robot_name = robot_name
+        self.numRobots = numRobots
         self.rate = rospy.Rate(FREQUENCY)
 
         self.patrol_path = []
@@ -60,8 +62,21 @@ class Patroller:
         # initializing _cmd_vel_pub and patrol publisher
         self._cmd_vel_pub = rospy.Publisher("/" + self.robot_name + DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
         self.patrol_sub = rospy.Subscriber("/" + self.robot_name + DEFAULT_PATROL_NAME, CoordArray, self.patrol_cb)
+        self.target_sub = rospy.Subscriber(TGT_TOPIC, Pose, self.target_cb)
+        self.target_loc = None
         self.listener = tf.TransformListener()
 
+        self.found_target = False
+        self.found_target_sub = rospy.Subscriber(DEFAULT_DISCOVERED_NAME, calcWays, self.found_target_cb)
+        self.found_target_pub = rospy.Publisher(DEFAULT_DISCOVERED_NAME, calcWays, queue_size=1)
+
+    def found_target_cb(self, msg):
+        self.found_target = msg.calculate == 1
+
+    def target_cb(self, msg):
+        print(msg)
+        self.target_loc = (msg.position.x, msg.position.y)
+        self.rate.sleep()
 
     def patrol_cb(self, msg):
         self.patrol_path = []
@@ -70,8 +85,6 @@ class Patroller:
         for coords in msg.coords:  # we have FloatLists here
             target = coords.elements
             path.append(target)
-        if self.robot_name == "robot_1":
-            print(path)
         self.patrol_path = path  # doing this incase the patrol function is called before callback finishes
 
     def get_transformed_point(self, waypoint):
@@ -82,7 +95,62 @@ class Patroller:
         return self.listener.transformPoint(self.robot_name + DEFAULT_BASE_LINK, waypoint_stamped)
 
     def surround(self):
-        return
+        self.listener.waitForTransform( "world", self.robot_name + "/base_link", rospy.Time(0), rospy.Duration(4.0))
+
+        # get the current transform and rotation matrices from tf listener
+        (trans, rot) = self.listener.lookupTransform("world", self.robot_name + "/base_link",  rospy.Time(0))
+        curr = (trans[0], trans[1])
+        distance_from_target = euclid_dist(curr[0], curr[1], self.target_loc[0], self.target_loc[1])
+        distance_to_radius = distance_from_target - TGT_RANGE  # stay TGT_RANGE away
+        # get velocity for moving towards target
+        angToTarget = math.atan2(self.target_loc[1] - curr[1], self.target_loc[0] - curr[0])
+        xRadius = distance_to_radius * math.cos(angToTarget)
+        yRadius = distance_to_radius * math.cos(angToTarget)
+        vxToRadius = xRadius - curr[0]
+        vyToRadius = yRadius - curr[0]
+        if distance_to_radius != 0:
+            vxToRadius /= distance_to_radius
+            vyToRadius /= distance_to_radius
+
+
+
+        avgX, avgY = 0, 0  # coordinate of average robots
+        numRobotsInRange = 0
+        for i in range(self.numRobots):
+            otherRobotName = "robot_" + str(i)
+            if otherRobotName != self.robot_name:
+                self.listener.waitForTransform( "world", otherRobotName+ "/base_link", rospy.Time(0), rospy.Duration(4.0))
+                # get the other transform and rotation matrices from tf listener
+                (other_trans, rot) = self.listener.lookupTransform("world", otherRobotName + "/base_link",  rospy.Time(0))
+                # find locations of other robots in range
+                if (euclid_dist(other_trans[0], other_trans[1], self.target_loc[0], self.target_loc[1]) <= TGT_RANGE):
+                    avgX += other_trans[0]
+                    avgY += other_trans[1]
+                    numRobotsInRange += 1
+        if numRobotsInRange != 0:
+            avgX /= numRobotsInRange
+            avgY /= numRobotsInRange
+        # get velocity for moving away from other robots
+        vxToCenter = avgX - curr[0]
+        vyToCenter = avgY - curr[1]
+        distToCenter = euclid_dist(avgX, avgY, curr[0], curr[1])
+        if euclid_dist != 0:
+            vxToCenter /= distToCenter
+            vyToCenter /= distToCenter
+
+        vx = vxToRadius - vxToCenter
+        vy = vyToRadius - vyToCenter
+
+        angle = math.atan2(vy, vx)
+        if angle < 0:
+            clockwise = True
+        else:
+            clockwise = False
+        self.rotate_in_place(angle, clockwise)
+        distToTravel = (vx**2 + vy**2) ** 0.5
+        self.move_forward(min(1, distToTravel))
+        self.rotate_in_place(angle, not clockwise)
+        self.rate.sleep()
 
     def patrol(self):
         if len(self.patrol_path) > 0:  # non empty patrol path
@@ -183,17 +251,18 @@ class Patroller:
 # MAIN METHOD
 # --------------------------------------------------------------------------------------------------------------------------------------------------
 def main():
+    numRobots = rospy.get_param("/numRobots")
     robot_name = rospy.get_param("robot_name")  # get relative param for name
     print(robot_name)
-    patroller = Patroller(robot_name)
+    patroller = Patroller(robot_name, numRobots)
     print("initialized patroller")
 
     # try:
     rate = rospy.Rate(FREQUENCY)
     while not rospy.is_shutdown():
-        if robot_name == "robot_1":
-            print(patroller.patrol_path)
-        patroller.patrol()
+        if patroller.target_loc is not None:
+            patroller.surround()
+        # patroller.patrol()
         rate.sleep()
 
 
