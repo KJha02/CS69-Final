@@ -3,7 +3,7 @@ import rospy
 import roslib
 from geometry_msgs.msg import PoseWithCovarianceStamped
 
-FREQUENCY = 5
+FREQUENCY = 10
 
 if __name__ == '__main__':
     print("initializing poses")

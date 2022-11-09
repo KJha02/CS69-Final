@@ -8,19 +8,29 @@ from wolfpack.msg import CoordArray, FloatList, calcWays
 import networkx as nx
 from networkx.algorithms.tree.mst import minimum_spanning_tree
 
-FREQUENCY = 5
+FREQUENCY = 10
 
 class Assigner:
-    def __init__(self, numRobots, cycle):
+    def __init__(self, numRobots):
+        self.wall_locations = set([])
+        # horizontal locations hard coded in
+        for wall in [[-4.0, 3.0], [-2.0, -1.0], [-5.0, -4.0], [3.0, 5.0], [5.0, 5.0], [4.0, 0.0], [5.0, 0.0]]:
+            self.wall_locations.add(tuple(wall))
+            self.wall_locations.add((wall[0]-1, wall[1]))
+            self.wall_locations.add((wall[0]+1, wall[1]))
+        # vertical locations hard coded in
+        for wall in [[-3.0, 2.0], [3.0, -2.0], [3.0, -4.0], [-2.0, -1.0], [-5.0, -3.0]]:
+            self.wall_locations.add(tuple(wall))
+            self.wall_locations.add((wall[0], wall[1]-1))
+            self.wall_locations.add((wall[0], wall[1]+1))
+
+
         self.numRobots = numRobots
         self.rate = rospy.Rate(FREQUENCY)
-
-        self.cycle = cycle
 
         self.assigned_path = {}
         self.patrol_publishers = {}
         self.full_graphs = {}
-        path_pct = len(self.cycle) // self.numRobots
         for i in range(self.numRobots):  # assigning default paths
             self.assigned_path[i] = self.makeCycle(i)
             self.patrol_publishers[i] = rospy.Publisher('/robot_' + str(i) + '/patrol', CoordArray, queue_size=1)
@@ -49,13 +59,14 @@ class Assigner:
                 down = y > lower_y
                 right = x < upper_x
                 left = x > lower_x
-                if (up):  # adding neighbors if in bounds
+                # adding neighbors if in bounds and not an obstacle
+                if (up) and (x, y+1) not in self.wall_locations:
                     G.add_edge((x,y), (x, y+1), weight=1)
-                if (down):
+                if (down) and (x, y-1) not in self.wall_locations:
                     G.add_edge((x,y), (x, y-1), weight=1)
-                if (left):
+                if (left) and (x-1, y) not in self.wall_locations:
                     G.add_edge((x,y), (x-1, y), weight=1)
-                if (right):
+                if (right) and (x+1, y) not in self.wall_locations:
                     G.add_edge((x,y), (x+1, y), weight=1)
 
         mst = minimum_spanning_tree(G)  # get mst from graph using kruskal's algorithm by default
@@ -63,8 +74,8 @@ class Assigner:
         def smallToBig(x, y):
             return (x // 2, y // 2)
 
-        firstBig = (lower_x, lower_y)  # you always start at the top left
-        firstSmall = (firstBig[0] * 2 + randint(0,1), firstBig[1]*2 + randint(0,1))
+        firstBig = (lower_x, upper_y)
+        firstSmall = (firstBig[0] * 2, firstBig[1]*2)
         cycle = []
         curr = firstSmall
         while (curr not in cycle):
@@ -73,30 +84,31 @@ class Assigner:
             isRight = x % 2 == 1
             isBottom = y % 2 == 0
             this_big = smallToBig(x, y)
-            if (not isRight and not isBottom):  # top left
-                up_big = (this_big[0], this_big[1] + 1)
-                if (up_big not in mst.adj[this_big]):  # go right, but only if tree isn't up
-                    curr = (x+1, y)
-                else:  # go up if tree goes up
-                    curr = (x, y+1)
-            elif (isRight and not isBottom):  # top right
-                right_big = (this_big[0] + 1, this_big[1])
-                if (right_big not in mst.adj[this_big]):  # go down only if right isn't coveren't
-                    curr = (x, y-1)
-                else:  # go right if tree goes right
-                    curr = (x+1, y)
-            elif (isRight and isBottom):  # bottom right
-                down_big = (this_big[0], this_big[1] - 1)
-                if (down_big not in mst.adj[this_big]):  #   # go left if tree doesn't go down
-                    curr = (x-1, y)
-                else:  # go down if tree goes down
-                    curr = (x, y-1)
-            else:  # bottom right
-                left_big = (this_big[0] - 1, this_big[1])
-                if (left_big not in mst.adj[this_big]):  # go up if tree doesn't go left
-                    curr = (x, y+1)
-                else:  # go left if tree goes left
-                    curr = (x-1, y)
+            if (this_big in mst.adj):  # if we have reached a valid coord
+                if (not isRight and not isBottom):  # top left
+                    up_big = (this_big[0], this_big[1] + 1)
+                    if (up_big not in mst.adj[this_big]):  # go right, but only if tree isn't up
+                        curr = (x+1, y)
+                    else:  # go up if tree goes up
+                        curr = (x, y+1)
+                elif (isRight and not isBottom):  # top right
+                    right_big = (this_big[0] + 1, this_big[1])
+                    if (right_big not in mst.adj[this_big]):  # go down only if right isn't coveren't
+                        curr = (x, y-1)
+                    else:  # go right if tree goes right
+                        curr = (x+1, y)
+                elif (isRight and isBottom):  # bottom right
+                    down_big = (this_big[0], this_big[1] - 1)
+                    if (down_big not in mst.adj[this_big]):  #   # go left if tree doesn't go down
+                        curr = (x-1, y)
+                    else:  # go down if tree goes down
+                        curr = (x, y-1)
+                else:  # bottom right
+                    left_big = (this_big[0] - 1, this_big[1])
+                    if (left_big not in mst.adj[this_big]):  # go up if tree doesn't go left
+                        curr = (x, y+1)
+                    else:  # go left if tree goes left
+                        curr = (x-1, y)
         return cycle
 
     def publish_paths(self):
@@ -114,9 +126,8 @@ class Assigner:
 
 def main():
     numRobots = rospy.get_param("/numRobots")
-    testcoords = [[-1, -1], [-1, 0], [-1, 1], [1, 1], [1, 0], [1, -1]]
 
-    assigner = Assigner(numRobots, testcoords)
+    assigner = Assigner(numRobots)
     rate = rospy.Rate(FREQUENCY)
     while not rospy.is_shutdown():
         assigner.publish_paths()
