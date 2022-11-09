@@ -1,14 +1,8 @@
 include "turtlebot.inc"
 
-define horzBlock model
+define obstacle model
 (
-  size [2.0 1.0 0.5]
-  gui_nose 0
-)
-
-define vertBlock model
-(
-  size [1.0 2.0 0.5]
+  size [1.0 1.0 0.5]
   gui_nose 0
 )
 
@@ -72,24 +66,5 @@ turtlebot
 )
 
 # making obstacles
-# horzBlock( pose [ -4.0 3.0 0 180.000 ] color "black")
-# vertBlock( pose [ -3.0 2.0 0 180.000 ] color "black")
 
-# vertBlock( pose [ 3.00 -2.0 0 180.000 ] color "black")
-# vertBlock( pose [ 3.00 -4.0 0 180.000 ] color "black")
-
-
-# horzBlock( pose [ -2.0 -1.0 0 180.000 ] color "black")
-# vertBlock( pose [ -2.0 -1.0 0 180.000 ] color "black")
-
-
-# horzBlock( pose [ -5.0 -4.0 0 180.000 ] color "black")
-# vertBlock( pose [ -5.0 -3.0 0 180.000 ] color "black")
-
-
-# horzBlock( pose [ 3.00 5.0 0 180.000 ] color "black")
-# horzBlock( pose [ 5.00 5.0 0 180.000 ] color "black")
-
-
-# horzBlock( pose [ 4.0 0.0 0 180.000 ] color "black")
-# horzBlock( pose [ 5.0 0.0 0 180.000 ] color "black")
+obstacle ( pose [ 3.5 2.5 0 180.000] color "black")
