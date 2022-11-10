@@ -1,5 +1,5 @@
 <launch>
-    <arg name="world_file" default="$(find wolfpack)/worlds/wolf_stage.world" />
+    <arg name="world_file" default="$(find wolfpack)/worlds/wolf_stage1.world" />
     <param name="/use_sim_time" value="true"/>
     <param name="/numRobots" value="4"/>
     <param name="/com_dist" value="3"/>
@@ -55,32 +55,32 @@
 
     <node name="robot_0_init_pose" pkg="wolfpack" type="initposes" respawn="false" output="screen" >
       <param name="turtle" type="string" value="robot_0" />
-      <param name= "x_pos" value="-6.0"/>
-      <param name= "y_pos" value="0.0"/>
+      <param name= "x_pos" value="0.25"/>
+      <param name= "y_pos" value="5.25"/>
       <param name= "z_pos" value="0.0"/>
     </node>
     <node name="robot_1_init_pose" pkg="wolfpack" type="initposes" respawn="false" output="screen" >
       <param name="turtle" type="string" value="robot_1" />
-      <param name= "x_pos" value="-6.0"/>
-      <param name= "y_pos" value="6.0"/>
+      <param name= "x_pos" value="0.25"/>
+      <param name= "y_pos" value="11.25"/>
       <param name= "z_pos" value="0.0"/>
     </node>
     <node name="robot_2_init_pose" pkg="wolfpack" type="initposes" respawn="false" output="screen" >
       <param name="turtle" type="string" value="robot_2" />
-      <param name= "x_pos" value="0.0"/>
-      <param name= "y_pos" value="6.0"/>
+      <param name= "x_pos" value="6.25"/>
+      <param name= "y_pos" value="11.25"/>
       <param name= "z_pos" value="0.0"/>
     </node>
     <node name="robot_3_init_pose" pkg="wolfpack" type="initposes" respawn="false" output="screen" >
       <param name="turtle" type="string" value="robot_3" />
-      <param name= "x_pos" value="0.0"/>
-      <param name= "y_pos" value="0.0"/>
+      <param name= "x_pos" value="6.25"/>
+      <param name= "y_pos" value="5.25"/>
       <param name= "z_pos" value="0.0"/>
     </node>
     <node name="robot_4_init_pose" pkg="wolfpack" type="initposes" respawn="false" output="screen" >
       <param name="turtle" type="string" value="robot_4" />
-      <param name= "x_pos" value="2.0"/>
-      <param name= "y_pos" value="2.0"/>
+      <param name= "x_pos" value="2.25"/>
+      <param name= "y_pos" value="2.25"/>
       <param name= "z_pos" value="0.0"/>
     </node>
 
