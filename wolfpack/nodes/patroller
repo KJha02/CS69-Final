@@ -37,6 +37,8 @@ NUM_BOTS = rospy.get_param("num_bots", 3)
 
 # --------------------------------------------------------------------------------------------------------------------------------------------------
 # SOME HELPER METHODS
+
+# helper function to find the euclidean distance between two points
 def euclid_dist(x1, y1, x2, y2):
     return ((x1-x2)**2 + (y1-y2)**2)**0.5
 
@@ -52,48 +54,66 @@ def angle_between(v1, v2):
 # --------------------------------------------------------------------------------------------------------------------------------------------------
 class Patroller:
     def __init__(self, robot_name, numRobots):
-        self.robot_name = robot_name
-        self.numRobots = numRobots
-        self.rate = rospy.Rate(FREQUENCY)
 
-        self.patrol_path = []
-        self.robot_loc = None
-
-        # initializing _cmd_vel_pub and patrol publisher
+        # initializing _cmd_vel_pub and target discovery publisher
         self._cmd_vel_pub = rospy.Publisher("/" + self.robot_name + DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
-        self.patrol_sub = rospy.Subscriber("/" + self.robot_name + DEFAULT_PATROL_NAME, CoordArray, self.patrol_cb)
-        self.target_sub = rospy.Subscriber(TGT_TOPIC, Pose, self.target_cb)
-        self.target_loc = None
-        self.listener = tf.TransformListener()
-
-        self.found_target = False
-        self.found_target_sub = rospy.Subscriber(DEFAULT_DISCOVERED_NAME, calcWays, self.found_target_cb)
         self.found_target_pub = rospy.Publisher(DEFAULT_DISCOVERED_NAME, calcWays, queue_size=1)
 
+        # initializing patrol subscriber, target subscriber, and target discovery subscriber
+        self.patrol_sub = rospy.Subscriber("/" + self.robot_name + DEFAULT_PATROL_NAME, CoordArray, self.patrol_cb)
+        self.target_sub = rospy.Subscriber(TGT_TOPIC, Pose, self.target_cb)
+        self.found_target_sub = rospy.Subscriber(DEFAULT_DISCOVERED_NAME, calcWays, self.found_target_cb)
+
+        # initializing TF Listener
+        self.listener = tf.TransformListener()
+
+        # instance variables
+        self.patroller_pose = Pose()
+        self.target_pose = Pose()
+        self.target_loc = None
+        self.found_target = False
+        self.patrol_path = []
+        self.robot_loc = None ###~~### WHERE IS THIS POPULATED? AND WHAT IS IT POPULATED WITH? IS THIS RELIABLY UPDATED??
+        self.robot_name = robot_name
+        self.numRobots = numRobots
+        self.rate = rospy.Rate(FREQUENCY)                
+
+# --------------------------------------------------------------------------------------------------------------------------------------------------
+# CALL BACK METHODS
+# --------------------------------------------------------------------------------------------------------------------------------------------------
+    # Purpose: Sends a binary message if target is found
     def found_target_cb(self, msg):
         self.found_target = msg.calculate == 1
 
+    # Purpose: Stores the target's location in an (x, y) tuple
     def target_cb(self, msg):
         print(msg)
+        self.target_pose = msg
         self.target_loc = (msg.position.x, msg.position.y)
         self.rate.sleep()
 
+    # Purpose: calculates the patrol path?? what does this method do??
     def patrol_cb(self, msg):
-        self.patrol_path = []
+        self.patrol_path = [] ###~~### DO WE NEED THIS HERE? INITIALIZED IN __init__ METHOD
         path = []
         self.rate.sleep()
         for coords in msg.coords:  # we have FloatLists here
             target = coords.elements
             path.append(target)
-        self.patrol_path = path  # doing this incase the patrol function is called before callback finishes
+        self.patrol_path = path  # doing this in case the patrol function is called before callback finishes
 
+    # Purpose: transforms the waypoint from the robot's to the world's reference frame??
     def get_transformed_point(self, waypoint):
-        waypoint_stamped = PointStamped()
-        waypoint_stamped.header.frame_id = 'world'
-        waypoint_stamped.point.x = waypoint[0]
-        waypoint_stamped.point.y = waypoint[1]
-        return self.listener.transformPoint(self.robot_name + DEFAULT_BASE_LINK, waypoint_stamped)
+        waypoint_stamped = PointStamped() # initializing as a new PointStamped message
+        waypoint_stamped.header.frame_id = 'world' # specify that is for the world frame
 
+        waypoint_stamped.point.x, waypoint_stamped.point.y = waypoint[0], waypoint[1] # populate the x and y coordinates 
+        return self.listener.transformPoint(self.robot_name + DEFAULT_BASE_LINK, waypoint_stamped) # return the transformed point
+
+
+# --------------------------------------------------------------------------------------------------------------------------------------------------
+# WOLFPACK/FLOCKGIN BEHAVIOUR METHODS -- NEED TO COMMENT THIS!!!!!
+# --------------------------------------------------------------------------------------------------------------------------------------------------  
     def surround(self):
         self.listener.waitForTransform( "world", self.robot_name + "/base_link", rospy.Time(0), rospy.Duration(4.0))
 
@@ -111,7 +131,6 @@ class Patroller:
         if distance_to_radius != 0:
             vxToRadius /= distance_to_radius
             vyToRadius /= distance_to_radius
-
 
 
         avgX, avgY = 0, 0  # coordinate of average robots
@@ -152,6 +171,7 @@ class Patroller:
         self.rotate_in_place(angle, not clockwise)
         self.rate.sleep()
 
+    #IS THIS THE WOLFPACK PATROL METHOD?
     def patrol(self):
         if len(self.patrol_path) > 0:  # non empty patrol path
             for target in self.patrol_path:
@@ -184,6 +204,52 @@ class Patroller:
                 self.move_forward(dist)  # move
                 self.rotate_in_place(angle, not clockwise) # rotating back to original face
                 self.rate.sleep()
+
+
+    # Method to retrive and return the current position of the patroller with respect to the world frame
+    def retrieve_pose(self):
+        patroller_pose = Pose() # initialize patroller position
+
+        now = rospy.Time(0)
+        self.listener.waitForTransform("world", self.bot_name + "/odom", now, rospy.Duration(4.0))
+
+        # get the transform and rotation matrices from tf listener
+        (trans, rot) = self.listener.lookupTransform("world", self.bot_name + "/odom", now)
+
+        # populate the patroller position
+        patroller_pose.position.x, patroller_pose.position.y = trans[0], trans[1]
+    
+        return patroller_pose
+
+    # Purpose: method that tests if the direct line of visibility from the patroller to the target is clear of obstacles
+    # Returns: a boolean true, if there is clear visibility and false if there is an obstacle
+    # Proposed run scheme: something like, "while patroller.visibility_test() returns false, keep moving along, run patroller.visibility_test()"
+    def visibility_test(self):
+        self.patroller_pose = self.retrieve_pose() # populate the current position of the patroller
+        visible_x_cords = []
+        visible_y_cords = []
+
+        no_obstacle = False
+
+        for x in range(self.patroller_pose.position.x, self.target_pose.position.x):
+            visible_x_cords.add(x) # add all of the x coordinates to check to a list
+
+        for y in range(self.patroller_pose.position.y, self.target_pose.position.y):
+            visible_y_cords.add(y) # add all of the y coordinates to check to a list
+
+        #### PSUEDOCODE FOR THE REST OF IT BECAUSE I AM TIRED, WILL FINISH UP LATER -- ALSO WE NEED AN INSTANCE VARIABLE (naming it M for now) THAT STORES THE BOUNDARIES (OUTLINES) OF THE OBSTACLES
+        # for every x in visible_x_cords:
+        #   if x in M:
+        #       if floor[corresponding y of the x in visible_x_cords] == bottom of the obstacle /// use indices to loop through to be able to do this:
+        #           no_obstacle = False
+        #           break
+        # for every y in visible_y_cords:
+        #   if y in M:
+        #       if floor[corresponding x of the y in visible_y_cords] == left of the obstacle /// use indices to loop through to be able to do this:
+        #           no_obstacle = False
+        #           break
+        
+        ### DONT MIND THIS, NEED TO FINISH IT OFF BUT MY BRAIN IS FRIED
 
 
 # --------------------------------------------------------------------------------------------------------------------------------------------------
