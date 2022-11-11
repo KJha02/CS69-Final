@@ -10,6 +10,7 @@ import tf
 import re
 import numpy as np
 import math
+from tf.transformations import euler_from_quaternion
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Twist, PointStamped # message type for cmd_vel
 from wolfpack.msg import CoordArray, FloatList, calcWays
@@ -27,10 +28,10 @@ DEFAULT_DISCOVERED_NAME = "/foundT"
 # constants
 FREQUENCY = 10 #Hz.
 TGT_RANGE = 2 # range within which patrollers actually register target's position and commence flocking behaviour
-RADIUS = 5 # radius for surrounding behaviour
-ANGULAR_VELOCITY = math.pi/4  # rads/sec
-LINEAR_VELOCITY = 0.1 # m/s
-VELOCITY_SCALE = 0.1
+RADIUS = 2 # radius for surrounding behaviour
+ANGULAR_VELOCITY = math.pi/2  # rads/sec
+LINEAR_VELOCITY = 0.2 # m/s
+VELOCITY_SCALE = 0.2
 
 # parameters
 NUM_BOTS = rospy.get_param("num_bots", 3)
@@ -54,6 +55,8 @@ def angle_between(v1, v2):
 # --------------------------------------------------------------------------------------------------------------------------------------------------
 class Patroller:
     def __init__(self, robot_name, numRobots):
+        self.robot_name = robot_name
+        self.numRobots = numRobots
 
         # initializing _cmd_vel_pub and target discovery publisher
         self._cmd_vel_pub = rospy.Publisher("/" + self.robot_name + DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
@@ -74,9 +77,7 @@ class Patroller:
         self.found_target = False
         self.patrol_path = []
         self.robot_loc = None ###~~### WHERE IS THIS POPULATED? AND WHAT IS IT POPULATED WITH? IS THIS RELIABLY UPDATED??
-        self.robot_name = robot_name
-        self.numRobots = numRobots
-        self.rate = rospy.Rate(FREQUENCY)                
+        self.rate = rospy.Rate(FREQUENCY)
 
 # --------------------------------------------------------------------------------------------------------------------------------------------------
 # CALL BACK METHODS
@@ -87,7 +88,7 @@ class Patroller:
 
     # Purpose: Stores the target's location in an (x, y) tuple
     def target_cb(self, msg):
-        print(msg)
+
         self.target_pose = msg
         self.target_loc = (msg.position.x, msg.position.y)
         self.rate.sleep()
@@ -107,30 +108,41 @@ class Patroller:
         waypoint_stamped = PointStamped() # initializing as a new PointStamped message
         waypoint_stamped.header.frame_id = 'world' # specify that is for the world frame
 
-        waypoint_stamped.point.x, waypoint_stamped.point.y = waypoint[0], waypoint[1] # populate the x and y coordinates 
+        waypoint_stamped.point.x, waypoint_stamped.point.y = waypoint[0], waypoint[1] # populate the x and y coordinates
         return self.listener.transformPoint(self.robot_name + DEFAULT_BASE_LINK, waypoint_stamped) # return the transformed point
 
 
 # --------------------------------------------------------------------------------------------------------------------------------------------------
-# WOLFPACK/FLOCKGIN BEHAVIOUR METHODS -- NEED TO COMMENT THIS!!!!!
-# --------------------------------------------------------------------------------------------------------------------------------------------------  
+# WOLFPACK/FLOCKING BEHAVIOUR METHODS -- NEED TO COMMENT THIS!!!!!
+# --------------------------------------------------------------------------------------------------------------------------------------------------
     def surround(self):
         self.listener.waitForTransform( "world", self.robot_name + "/base_link", rospy.Time(0), rospy.Duration(4.0))
 
         # get the current transform and rotation matrices from tf listener
         (trans, rot) = self.listener.lookupTransform("world", self.robot_name + "/base_link",  rospy.Time(0))
         curr = (trans[0], trans[1])
-        distance_from_target = euclid_dist(curr[0], curr[1], self.target_loc[0], self.target_loc[1])
-        distance_to_radius = distance_from_target - TGT_RANGE  # stay TGT_RANGE away
+        target_loc_point = self.get_transformed_point(self.target_loc)
+        target_loc = (target_loc_point.point.x, target_loc_point.point.y)
+
+        distance_from_target = euclid_dist(0, 0, target_loc[0], target_loc[1])
+        distance_to_radius = distance_from_target - RADIUS  # stay TGT_RANGE away
         # get velocity for moving towards target
-        angToTarget = math.atan2(self.target_loc[1] - curr[1], self.target_loc[0] - curr[0])
+        angToTarget = math.atan2(target_loc[1], target_loc[0])
         xRadius = distance_to_radius * math.cos(angToTarget)
-        yRadius = distance_to_radius * math.cos(angToTarget)
-        vxToRadius = xRadius - curr[0]
-        vyToRadius = yRadius - curr[0]
-        if distance_to_radius != 0:
-            vxToRadius /= distance_to_radius
-            vyToRadius /= distance_to_radius
+        yRadius = distance_to_radius * math.sin(angToTarget)
+
+        if self.robot_name == "robot_2":
+            print("Robot 2 surrounding:")
+            print("Robot 2's location:")
+            print(curr)
+            print("Target's location:")
+            print(self.target_loc)
+            print("Robot 2's distance from target:")
+            print(distance_from_target)
+            print("Angle from target to robot:")
+            print(angToTarget)
+            print("X and Y distance from safe zone boundary:")
+            print((xRadius, yRadius))
 
 
         avgX, avgY = 0, 0  # coordinate of average robots
@@ -141,34 +153,37 @@ class Patroller:
                 self.listener.waitForTransform( "world", otherRobotName+ "/base_link", rospy.Time(0), rospy.Duration(4.0))
                 # get the other transform and rotation matrices from tf listener
                 (other_trans, rot) = self.listener.lookupTransform("world", otherRobotName + "/base_link",  rospy.Time(0))
+                other_loc_Point = self.get_transformed_point((other_trans[0], other_trans[1]))
+                other_loc = (other_loc_Point.point.x, other_loc_Point.point.y)
                 # find locations of other robots in range
-                if (euclid_dist(other_trans[0], other_trans[1], self.target_loc[0], self.target_loc[1]) <= TGT_RANGE):
-                    avgX += other_trans[0]
-                    avgY += other_trans[1]
+                if (euclid_dist(other_loc[0], other_loc[1], target_loc[0], target_loc[1]) <= RADIUS) and (distance_from_target <= RADIUS):
+                    avgX += other_loc[0]
+                    avgY += other_loc[1]
                     numRobotsInRange += 1
-        if numRobotsInRange != 0:
+        if numRobotsInRange != 0:  # compute the center of all the robots in the average
             avgX /= numRobotsInRange
             avgY /= numRobotsInRange
-        # get velocity for moving away from other robots
-        vxToCenter = avgX - curr[0]
-        vyToCenter = avgY - curr[1]
-        distToCenter = euclid_dist(avgX, avgY, curr[0], curr[1])
-        if euclid_dist != 0:
-            vxToCenter /= distToCenter
-            vyToCenter /= distToCenter
 
-        vx = vxToRadius - vxToCenter
-        vy = vyToRadius - vyToCenter
+        # coordinates to move away from average of robots in center
+        separateX = -avgX
+        separateY = -avgY
+        separateDist = (separateX**2 + separateY**2)**0.5
 
-        angle = math.atan2(vy, vx)
-        if angle < 0:
-            clockwise = True
-        else:
-            clockwise = False
-        self.rotate_in_place(angle, clockwise)
-        distToTravel = (vx**2 + vy**2) ** 0.5
-        self.move_forward(min(1, distToTravel))
-        self.rotate_in_place(angle, not clockwise)
+        # calculate weights for combining action
+        separateWeight = 0.5
+        if (separateDist + distance_to_radius) != 0:
+            separateWeight = separateDist / (separateDist + distance_to_radius)
+        followerWeight = 1 - separateWeight
+
+        # calculate joint movement coords and angle
+        jointX = xRadius * followerWeight + separateX * separateWeight
+        jointY = yRadius * followerWeight + separateY * separateWeight
+        distanceToJoint = (jointX**2 + jointY**2)**0.5
+        angleToJoint = math.atan2(jointY, jointX)
+        clockwise = angleToJoint < 0
+        self.rotate_in_place(angleToJoint, clockwise)
+        self.move_forward(min(0.1, distanceToJoint))
+
         self.rate.sleep()
 
     #IS THIS THE WOLFPACK PATROL METHOD?
@@ -218,7 +233,7 @@ class Patroller:
 
         # populate the patroller position
         patroller_pose.position.x, patroller_pose.position.y = trans[0], trans[1]
-    
+
         return patroller_pose
 
     # Purpose: method that tests if the direct line of visibility from the patroller to the target is clear of obstacles
@@ -248,7 +263,7 @@ class Patroller:
         #       if floor[corresponding x of the y in visible_y_cords] == left of the obstacle /// use indices to loop through to be able to do this:
         #           no_obstacle = False
         #           break
-        
+
         ### DONT MIND THIS, NEED TO FINISH IT OFF BUT MY BRAIN IS FRIED
 
 
@@ -328,7 +343,8 @@ def main():
     while not rospy.is_shutdown():
         if patroller.target_loc is not None:
             patroller.surround()
-        # patroller.patrol()
+        # else:
+        #     patroller.patrol()
         rate.sleep()
 
 
