@@ -1,5 +1,5 @@
 <launch>
-    <arg name="world_file" default="$(find wolfpack)/worlds/wolf_stage1.world" />
+    <arg name="world_file" default="$(find wolfpack)/worlds/wolf_stage0.world" />
     <param name="/use_sim_time" value="true"/>
     <param name="/numRobots" value="4"/>
     <param name="/com_dist" value="3"/>

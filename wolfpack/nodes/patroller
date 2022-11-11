@@ -10,6 +10,7 @@ import tf
 import re
 import numpy as np
 import math
+from tf.transformations import euler_from_quaternion
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Twist, PointStamped # message type for cmd_vel
 from wolfpack.msg import CoordArray, FloatList, calcWays
@@ -27,10 +28,10 @@ DEFAULT_DISCOVERED_NAME = "/foundT"
 # constants
 FREQUENCY = 10 #Hz.
 TGT_RANGE = 2 # range within which patrollers actually register target's position and commence flocking behaviour
-RADIUS = 5 # radius for surrounding behaviour
-ANGULAR_VELOCITY = math.pi/4  # rads/sec
-LINEAR_VELOCITY = 0.1 # m/s
-VELOCITY_SCALE = 0.1
+RADIUS = 2 # radius for surrounding behaviour
+ANGULAR_VELOCITY = math.pi/2  # rads/sec
+LINEAR_VELOCITY = 0.2 # m/s
+VELOCITY_SCALE = 0.2
 
 # parameters
 NUM_BOTS = rospy.get_param("num_bots", 3)
@@ -54,6 +55,8 @@ def angle_between(v1, v2):
 # --------------------------------------------------------------------------------------------------------------------------------------------------
 class Patroller:
     def __init__(self, robot_name, numRobots):
+        self.robot_name = robot_name
+        self.numRobots = numRobots
 
         # initializing _cmd_vel_pub and target discovery publisher
         self._cmd_vel_pub = rospy.Publisher("/" + self.robot_name + DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
@@ -74,8 +77,6 @@ class Patroller:
         self.found_target = False
         self.patrol_path = []
         self.robot_loc = None ###~~### WHERE IS THIS POPULATED? AND WHAT IS IT POPULATED WITH? IS THIS RELIABLY UPDATED??
-        self.robot_name = robot_name
-        self.numRobots = numRobots
         self.rate = rospy.Rate(FREQUENCY)
 
 # --------------------------------------------------------------------------------------------------------------------------------------------------
@@ -87,7 +88,7 @@ class Patroller:
 
     # Purpose: Stores the target's location in an (x, y) tuple
     def target_cb(self, msg):
-        print(msg)
+
         self.target_pose = msg
         self.target_loc = (msg.position.x, msg.position.y)
         self.rate.sleep()
@@ -342,8 +343,8 @@ def main():
     while not rospy.is_shutdown():
         if patroller.target_loc is not None:
             patroller.surround()
-        else:
-            patroller.patrol()
+        # else:
+        #     patroller.patrol()
         rate.sleep()
 
 
