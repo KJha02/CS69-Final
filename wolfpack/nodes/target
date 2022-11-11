@@ -20,6 +20,7 @@ import math
 # topic constants
 TGT_TOPIC = "/target"
 DEFAULT_CMD_VEL_TOPIC = "/cmd_vel"
+DEFAULT_BASE_LINK = "/base_link"
 
 # constants
 # constants
@@ -36,6 +37,7 @@ def euclid_dist(x1, y1, x2, y2):
 # --------------------------------------------------------------------------------------------------------------------------------------------------
 class Target:
     def __init__(self, robot_name):
+        self.bot_name = robot_name
         # setting up location publisher
         self._target_pub = rospy.Publisher(TGT_TOPIC, Pose, queue_size=1)
 
@@ -44,9 +46,15 @@ class Target:
 
         # name of the target (for location purposes)
         # self.bot_name = "robot_" + str(int(re.search(r'\d+', rospy.get_namespace()).group()))
-        self.bot_name = robot_name
 
         self._cmd_vel_pub = rospy.Publisher("/" + self.bot_name + DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
+
+    def get_transformed_point(self, waypoint):
+        waypoint_stamped = PointStamped()
+        waypoint_stamped.header.frame_id = 'world'
+        waypoint_stamped.point.x = waypoint[0]
+        waypoint_stamped.point.y = waypoint[1]
+        return self.listener.transformPoint(self.bot_name + DEFAULT_BASE_LINK, waypoint_stamped)
 
     # Method to retrive and return the current position of the target with respect to the world frame
     def retrieve_pose(self):
@@ -68,8 +76,11 @@ class Target:
         (trans, rot) = self.listener.lookupTransform("world", self.bot_name + "/base_link",  rospy.Time(0))
 
 
-        rand_x = random.uniform(-6, 6)
-        rand_y = random.uniform(-6, 6)
+        rand_x = random.uniform(0, 12)
+        rand_y = random.uniform(0, 12)
+        transformedRandPoint = self.get_transformed_point((rand_x, rand_y))
+        rand_x = transformedRandPoint.point.x
+        rand_y = transformedRandPoint.point.y
         rand_distance = euclid_dist(rand_x, rand_y, trans[0], trans[1])
         rand_angle = math.atan2(rand_y - trans[1], rand_x - trans[0])
         self.rotate_in_place(rand_angle)
