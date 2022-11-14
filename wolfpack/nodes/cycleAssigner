@@ -14,14 +14,23 @@ UPPER_X = 12
 LOWER_Y = 0
 UPPER_Y = 12
 
+OBST_TOPIC = "/obstacle_topic"
+
 class Assigner:
     def __init__(self, numRobots):
+        # creating a publisher that will have all of the obstacles 
+        self.obstacles_pub = rospy.Publisher(OBST_TOPIC, CoordArray, queue_size=1)
+
         self.wall_grid = [[0 for _ in range(UPPER_Y)] for __ in range(UPPER_X)]  # TODO: Fill in 12 by 12 2d array
 
         wall_locations = [[7, 8], [8, 9], [9,9], [10,9], [10,8], [10,7], [10, 6],
                         [4, 7], [4, 8], [4, 9], [4, 10],
                         [1, 3], [2, 3], [2, 4], [3, 4], [4, 1], [4, 2],
                         [7, 3], [8, 3], [9, 3], [10, 2], [10, 3], [10, 4], [9, 4]]
+
+        self.obstacles_pub.publish(wall_locations) # publishg the wall locations to the obstacles publisher
+
+
         for locs in wall_locations:
             self.wall_grid[locs[0]][locs[1]] = 1
 

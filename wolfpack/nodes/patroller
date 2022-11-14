@@ -24,6 +24,7 @@ DEFAULT_ODOM_TOPIC = "/odom"
 DEFAULT_BASE_LINK = "/base_link"
 DEFAULT_PATROL_NAME = "/patrol"
 DEFAULT_DISCOVERED_NAME = "/foundT"
+OBST_TOPIC = "/obstacle_topic"
 
 # constants
 FREQUENCY = 10 #Hz.
@@ -55,30 +56,32 @@ def angle_between(v1, v2):
 # --------------------------------------------------------------------------------------------------------------------------------------------------
 class Patroller:
     def __init__(self, robot_name, numRobots, initX, initY):
-        self.robot_name = robot_name
-        self.numRobots = numRobots
-        self.initial_loc = (initX, initY)
-        self.rate = rospy.Rate(FREQUENCY)
-
-        # initializing _cmd_vel_pub and target discovery publisher
-        self._cmd_vel_pub = rospy.Publisher("/" + self.robot_name + DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
-        self.found_target_pub = rospy.Publisher(DEFAULT_DISCOVERED_NAME, calcWays, queue_size=1)
-
-        # initializing patrol subscriber, target subscriber, and target discovery subscriber
-        self.patrol_sub = rospy.Subscriber("/" + self.robot_name + DEFAULT_PATROL_NAME, CoordArray, self.patrol_cb)
-        self.target_sub = rospy.Subscriber(TGT_TOPIC, Pose, self.target_cb)
-        self.found_target_sub = rospy.Subscriber(DEFAULT_DISCOVERED_NAME, calcWays, self.found_target_cb)
-
-        # initializing TF Listener
-        self.listener = tf.TransformListener()
-
         # instance variables
         self.patroller_pose = Pose()
         self.target_pose = Pose()
         self.target_loc = None
         self.found_target = False
         self.patrol_path = []
-        self.robot_loc = None ###~~### WHERE IS THIS POPULATED? AND WHAT IS IT POPULATED WITH? IS THIS RELIABLY UPDATED??
+        self.robot_loc = None 
+        self.robot_name = robot_name
+        self.numRobots = numRobots
+        self.initial_loc = (initX, initY)
+        self.rate = rospy.Rate(FREQUENCY)
+
+        self.obstacles = CoordArray()
+
+        # initializing _cmd_vel_pub and target discovery publisher
+        self._cmd_vel_pub = rospy.Publisher("/" + self.robot_name + DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
+        self.found_target_pub = rospy.Publisher(DEFAULT_DISCOVERED_NAME, calcWays, queue_size=1)
+
+        # initializing patrol subscriber, target subscriber, and target discovery subscriber, and obstacles subscriber
+        self.patrol_sub = rospy.Subscriber("/" + self.robot_name + DEFAULT_PATROL_NAME, CoordArray, self.patrol_cb)
+        self.target_sub = rospy.Subscriber(TGT_TOPIC, Pose, self.target_cb)
+        self.found_target_sub = rospy.Subscriber(DEFAULT_DISCOVERED_NAME, calcWays, self.found_target_cb)
+        self.obstacles_sub = rospy.Subscriber(OBST_TOPIC, CoordArray, self._obst_callback, queue_size=1)
+
+        # initializing TF Listener
+        self.listener = tf.TransformListener()
 
 # --------------------------------------------------------------------------------------------------------------------------------------------------
 # CALL BACK METHODS
@@ -86,6 +89,10 @@ class Patroller:
     # Purpose: Sends a binary message if target is found
     def found_target_cb(self, msg):
         self.found_target = msg.calculate == 1
+
+    # Purpose: retrieve and store obstacles in an instance variable that we access for the visibility test
+    def _obst_callback(self, msg):
+        self.obstacles = msg
 
     # Purpose: Stores the target's location in an (x, y) tuple
     def target_cb(self, msg):
@@ -250,13 +257,32 @@ class Patroller:
         visible_x_cords = []
         visible_y_cords = []
 
-        no_obstacle = False
+        no_obstacle = True
 
         for x in range(self.patroller_pose.position.x, self.target_pose.position.x):
             visible_x_cords.add(x) # add all of the x coordinates to check to a list
 
         for y in range(self.patroller_pose.position.y, self.target_pose.position.y):
             visible_y_cords.add(y) # add all of the y coordinates to check to a list
+
+        for i in range(len(visible_x_cords) - 1): # loop through all of the visibile x's
+            for obst in self.obstacles: # loop through all of the obstacles
+                if obst[0] == visible_x_cords[i]: # if the visible x is in the obstacle
+                    if math.floor(visible_y_cords[i]) == obst[1]: # if bottom of the obstacle is the floor of the corresponding y
+                        no_obstacle = False
+                        break
+
+        # same thing for the vertical walls
+        for j in range(len(visible_y_cords) - 1):
+            for obst in self.obstacles:
+                if obst[1] == visible_y_cords[j]:
+                    if math.floor(visible_x_cords[j]) == obst[0]:
+                        no_obstacle = False
+                        break
+        
+        return no_obstacle # returns true if there are no obstacles between the patroller and target, false otherwise
+
+        ### ADJUST BEHAVIOUR OF THE ROBOT ACCORDING TO THE VISIBILITY TEST
 
         #### PSUEDOCODE FOR THE REST OF IT BECAUSE I AM TIRED, WILL FINISH UP LATER -- ALSO WE NEED AN INSTANCE VARIABLE (naming it M for now) THAT STORES THE BOUNDARIES (OUTLINES) OF THE OBSTACLES
         # for every x in visible_x_cords:
