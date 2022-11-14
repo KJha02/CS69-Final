@@ -27,10 +27,10 @@ DEFAULT_DISCOVERED_NAME = "/foundT"
 
 # constants
 FREQUENCY = 10 #Hz.
-TGT_RANGE = 2 # range within which patrollers actually register target's position and commence flocking behaviour
+TGT_RANGE = 1.5 # range within which patrollers actually register target's position and commence flocking behaviour
 RADIUS = 2 # radius for surrounding behaviour
-ANGULAR_VELOCITY = math.pi/2  # rads/sec
-LINEAR_VELOCITY = 0.2 # m/s
+ANGULAR_VELOCITY = math.pi/4  # rads/sec
+LINEAR_VELOCITY = 0.1 # m/s
 VELOCITY_SCALE = 0.2
 
 # parameters
@@ -54,9 +54,11 @@ def angle_between(v1, v2):
 
 # --------------------------------------------------------------------------------------------------------------------------------------------------
 class Patroller:
-    def __init__(self, robot_name, numRobots):
+    def __init__(self, robot_name, numRobots, initX, initY):
         self.robot_name = robot_name
         self.numRobots = numRobots
+        self.initial_loc = (initX, initY)
+        self.rate = rospy.Rate(FREQUENCY)
 
         # initializing _cmd_vel_pub and target discovery publisher
         self._cmd_vel_pub = rospy.Publisher("/" + self.robot_name + DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
@@ -77,7 +79,6 @@ class Patroller:
         self.found_target = False
         self.patrol_path = []
         self.robot_loc = None ###~~### WHERE IS THIS POPULATED? AND WHAT IS IT POPULATED WITH? IS THIS RELIABLY UPDATED??
-        self.rate = rospy.Rate(FREQUENCY)
 
 # --------------------------------------------------------------------------------------------------------------------------------------------------
 # CALL BACK METHODS
@@ -100,8 +101,10 @@ class Patroller:
         self.rate.sleep()
         for coords in msg.coords:  # we have FloatLists here
             target = coords.elements
-            path.append(target)
-        self.patrol_path = path  # doing this in case the patrol function is called before callback finishes
+            path.append(tuple(target))
+        startIdx = path.index(self.initial_loc)
+        res = path[startIdx:] + path[:startIdx]
+        self.patrol_path = res  # doing this in case the patrol function is called before callback finishes
 
     # Purpose: transforms the waypoint from the robot's to the world's reference frame??
     def get_transformed_point(self, waypoint):
@@ -189,26 +192,30 @@ class Patroller:
     #IS THIS THE WOLFPACK PATROL METHOD?
     def patrol(self):
         if len(self.patrol_path) > 0:  # non empty patrol path
+            # print(self.patrol_path)
             for target in self.patrol_path:
+                self.listener.waitForTransform("world", self.robot_name + "/base_link", rospy.Time(0), rospy.Duration(4.0))
+                # get the transform and rotation matrices from tf listener
+                (trans, rot) = self.listener.lookupTransform("world", self.robot_name + "/base_link",  rospy.Time(0))
+
+                print("Robot perceived location in world frame:")
+                print((trans[0], trans[1]))
+
                 self.robot_loc = (0, 0)  # making calculations from robot's perspective
-
+                print("Target robot wants to go to from world frame: ")
+                print(target)
                 coords = self.get_transformed_point(target)
+
                 coords = [coords.point.x, coords.point.y]
+                print("Target robot wants to go to from robot frame: ")
+                print(coords)
 
 
-                vx, vy = coords[0] - self.robot_loc[0], coords[1] - self.robot_loc[1]
+
+
                 dist = euclid_dist(coords[0], coords[1], 0, 0)
-                # dist = euclid_dist(coords[0], coords[1], self.robot_loc[0], self.robot_loc[1])
 
-                # normalize velocity
-                if dist != 0:
-                    vx /= dist
-                    vy /= dist
-                # scale velocity
-                vx *= VELOCITY_SCALE
-                vy *= VELOCITY_SCALE
-
-                angle = math.atan2(vy, vx)
+                angle = math.atan2(coords[1], coords[0])
 
                 if angle * -1 >= 0:
                     clockwise = True
@@ -217,7 +224,6 @@ class Patroller:
 
                 self.rotate_in_place(angle, clockwise)  # move
                 self.move_forward(dist)  # move
-                self.rotate_in_place(angle, not clockwise) # rotating back to original face
                 self.rate.sleep()
 
 
@@ -334,17 +340,21 @@ class Patroller:
 def main():
     numRobots = rospy.get_param("/numRobots")
     robot_name = rospy.get_param("robot_name")  # get relative param for name
+    initialX = rospy.get_param("x_pos")
+    initialY = rospy.get_param("y_pos")
+
     print(robot_name)
-    patroller = Patroller(robot_name, numRobots)
+    patroller = Patroller(robot_name, numRobots, initialX, initialY)
     print("initialized patroller")
 
     # try:
     rate = rospy.Rate(FREQUENCY)
     while not rospy.is_shutdown():
-        if patroller.target_loc is not None:
-            patroller.surround()
+        # if patroller.target_loc is not None:
+        #     patroller.surround()
         # else:
-        #     patroller.patrol()
+
+        patroller.patrol()
         rate.sleep()
 
 

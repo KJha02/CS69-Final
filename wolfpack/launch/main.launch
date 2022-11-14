@@ -18,17 +18,25 @@
     <group ns= "robot_0">
       <param name="robot_name" value="robot_0" />
       <remap from="base_scan" to="scan" />
+      <param name= "x_pos" value="0.25"/>
+      <param name= "y_pos" value="5.25"/>
     </group>
     <group ns= "robot_1">
       <param name="robot_name" value="robot_1" />
       <remap from="base_scan" to="scan" />
+      <param name= "x_pos" value="0.25"/>
+      <param name= "y_pos" value="11.25"/>
     </group>
     <group ns= "robot_2">
       <param name="robot_name" value="robot_2" />
       <remap from="base_scan" to="scan" />
+      <param name= "x_pos" value="6.25"/>
+      <param name= "y_pos" value="11.25"/>
     </group>
     <group ns= "robot_3">
       <param name="robot_name" value="robot_3" />
+      <param name= "x_pos" value="6.25"/>
+      <param name= "y_pos" value="5.25"/>
       <remap from="base_scan" to="scan" />
     </group>
     <group ns= "robot_4">

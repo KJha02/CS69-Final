@@ -77,7 +77,7 @@ obstacle ( pose [ 10.5 7.5 0 180.000] color "pink")
 obstacle ( pose [ 10.5 6.5 0 180.000] color "pink")
 
 
-# quadrant 2
+# quadrant 2  within actual array round down (4, 7) is location of first wall
 obstacle ( pose [ 4.5 7.5 0 180.000] color "purple")
 obstacle ( pose [ 4.5 8.5 0 180.000] color "purple")
 obstacle ( pose [ 4.5 9.5 0 180.000] color "purple")
@@ -95,7 +95,7 @@ obstacle ( pose [ 4.5 2.5 0 180.000] color "magenta")
 obstacle ( pose [ 7.5 3.5 0 180.000] color "lilac")
 obstacle ( pose [ 8.5 3.5 0 180.000] color "lilac")
 obstacle ( pose [ 9.5 3.5 0 180.000] color "lilac")
-obstacle ( pose [ 10.5 3.5 0 180.000] color "lilac")
 obstacle ( pose [ 10.5 2.5 0 180.000] color "lilac")
+obstacle ( pose [ 10.5 3.5 0 180.000] color "lilac")
 obstacle ( pose [ 10.5 4.5 0 180.000] color "lilac")
 obstacle ( pose [ 9.5 4.5 0 180.000] color "lilac")

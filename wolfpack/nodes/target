@@ -71,18 +71,19 @@ class Target:
 
 
     def random_walk(self):
-        self.listener.waitForTransform("world", self.bot_name + "/base_link", rospy.Time(0), rospy.Duration(4.0))
-        # get the transform and rotation matrices from tf listener
-        (trans, rot) = self.listener.lookupTransform("world", self.bot_name + "/base_link",  rospy.Time(0))
+        # self.listener.waitForTransform("world", self.bot_name + "/base_link", rospy.Time(0), rospy.Duration(4.0))
+        # # get the transform and rotation matrices from tf listener
+        # (trans, rot) = self.listener.lookupTransform("world", self.bot_name + "/base_link",  rospy.Time(0))
+        #
 
+        rand_x = random.uniform(0, 1)
+        rand_y = random.uniform(0, 1)
+        # transformedRandPoint = self.get_transformed_point((rand_x, rand_y))
+        # rand_x = transformedRandPoint.point.x
+        # rand_y = transformedRandPoint.point.y
 
-        rand_x = random.uniform(0, 12)
-        rand_y = random.uniform(0, 12)
-        transformedRandPoint = self.get_transformed_point((rand_x, rand_y))
-        rand_x = transformedRandPoint.point.x
-        rand_y = transformedRandPoint.point.y
-        rand_distance = euclid_dist(rand_x, rand_y, trans[0], trans[1])
-        rand_angle = math.atan2(rand_y - trans[1], rand_x - trans[0])
+        rand_distance = euclid_dist(rand_x, rand_y, 0, 0)
+        rand_angle = math.atan2(rand_y, rand_x)
         self.rotate_in_place(rand_angle)
         self.move_forward(rand_distance)
         self.rotate_in_place(-rand_angle)
@@ -163,6 +164,7 @@ def main():
     # 1st. initialization of node.
     rospy.init_node("target")
     robot_name = rospy.get_param("robot_name")  # get relative param for name
+
 
     # Sleep for a few seconds to wait for the registration.
     rospy.sleep(2)
