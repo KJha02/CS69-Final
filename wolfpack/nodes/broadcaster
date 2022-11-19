@@ -7,6 +7,8 @@ import tf2_ros
 from geometry_msgs.msg import PoseWithCovarianceStamped
 
 FREQUENCY = 10
+
+# tf broadcaster for broadcaster each turtlebot's pose
 def handle_turtle_pose(msg, turtlename):
     print("making broadcaster")
     br = tf.TransformBroadcaster()
