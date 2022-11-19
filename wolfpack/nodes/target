@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-# AUTHOR: Anna Mikhailova - edits by Kunal Jha
 # CLASS: Multi-Robot Systems, 22F, Final Project
 
 # PURPOSE: a node for the target robot, which shares its location with the patroller robots
@@ -28,7 +27,7 @@ FREQUENCY = 10 #Hz.
 TGT_RANGE = 2 # range within which patrollers actually register target's position and commence flocking behaviour
 RADIUS = 5 # radius for surrounding behaviour
 ANGULAR_VELOCITY = math.pi/4  # rads/sec
-LINEAR_VELOCITY = 0.1 # m/s
+LINEAR_VELOCITY = 0.2 # m/s
 
 def euclid_dist(x1, y1, x2, y2):
     return ((x1-x2)**2 + (y1-y2)**2)**0.5
@@ -75,19 +74,19 @@ class Target:
         # # get the transform and rotation matrices from tf listener
         # (trans, rot) = self.listener.lookupTransform("world", self.bot_name + "/base_link",  rospy.Time(0))
         #
+        waypoints = [[6, 8], [6, 7], [6, 6], [6, 5], [5, 5], [6, 4], [6, 5], [6, 6], [7, 6], [8, 7], [7, 7]]
+        for p in waypoints:
+            transformedRandPoint = self.get_transformed_point(p)  # convert to robot's perspective
+            rand_x = transformedRandPoint.point.x
+            rand_y = transformedRandPoint.point.y
 
-        rand_x = random.uniform(0, 1)
-        rand_y = random.uniform(0, 1)
-        # transformedRandPoint = self.get_transformed_point((rand_x, rand_y))
-        # rand_x = transformedRandPoint.point.x
-        # rand_y = transformedRandPoint.point.y
+            rand_distance = euclid_dist(rand_x, rand_y, 0, 0)  # params for moving
+            rand_angle = math.atan2(rand_y, rand_x)
 
-        rand_distance = euclid_dist(rand_x, rand_y, 0, 0)
-        rand_angle = math.atan2(rand_y, rand_x)
-        self.rotate_in_place(rand_angle)
-        self.move_forward(rand_distance)
-        self.rotate_in_place(-rand_angle)
-        self.stop()
+            self.rotate_in_place(rand_angle)  # move
+            self.move_forward(rand_distance)
+
+            self.stop()
 
 
 
@@ -115,8 +114,6 @@ class Target:
 
             # Publish message.
             self._cmd_vel_pub.publish(twist_msg)
-            msg = self.retrieve_pose()
-            self._target_pub.publish(msg) # publish the position of the target
 
             # Sleep to keep the set publishing frequency.
             rate.sleep()
@@ -146,8 +143,6 @@ class Target:
                 break
 
             self._cmd_vel_pub.publish(twist_msg)  # Publish message.
-            msg = self.retrieve_pose()
-            self._target_pub.publish(msg) # publish the position of the target
             rate.sleep()  # Sleep to keep the set frequency.
 
         self.stop()  # Rotated the required angle, stop.
@@ -175,9 +170,11 @@ def main():
     rospy.sleep(4)
     rate = rospy.Rate(FREQUENCY)
 
+
+
     try:
         while not rospy.is_shutdown(): #-- implement while loop later on when we don't have a stationary target
-            target.random_walk()
+            # target.random_walk()  # uncomment for movement
             rospy.sleep(2)
 
 

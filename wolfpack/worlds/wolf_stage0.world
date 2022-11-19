@@ -36,7 +36,7 @@ window
 # throw multiple robots
 turtlebot
 (
-  pose [ 0.25 5.25 0.0 0.0 ]
+  pose [ 0.25 0.25 0.0 0.0 ]
   name "rb_1"
   color "blue"
 )
@@ -48,19 +48,19 @@ turtlebot
 )
 turtlebot
 (
-  pose [ 6.25 11.25 0.0 0.0 ]
+  pose [ 11.25 11.25 0.0 0.0 ]
   name "rb_3"
   color "blue"
 )
 turtlebot
 (
-  pose [ 6.25 5.25 0.0 0.0 ]
+  pose [ 11.25 0.25 0.0 0.0 ]
   name "rb_4"
   color "blue"
 )
 turtlebot
 (
-  pose [ 2.25 2.25 0.0 0.0 ]
+  pose [ 6.0 8.0 0.0 0.0 ]
   name "rb_5"
   color "red"
 )

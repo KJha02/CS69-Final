@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-# AUTHOR: Kunal Jha - Anna Mikhailova
-
 # --------------------------------------------------------------------------------------------------------------------------------------------------
 # import of relevant python modules and libraries
 import rospy
@@ -14,6 +12,8 @@ from tf.transformations import euler_from_quaternion
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Twist, PointStamped # message type for cmd_vel
 from wolfpack.msg import CoordArray, FloatList, calcWays
+import networkx as nx
+from networkx import shortest_path
 
 roslib.load_manifest("wolfpack")
 
@@ -24,14 +24,19 @@ DEFAULT_ODOM_TOPIC = "/odom"
 DEFAULT_BASE_LINK = "/base_link"
 DEFAULT_PATROL_NAME = "/patrol"
 DEFAULT_DISCOVERED_NAME = "/foundT"
+OBST_TOPIC = "/obstacle_topic"
 
 # constants
 FREQUENCY = 10 #Hz.
-TGT_RANGE = 1.5 # range within which patrollers actually register target's position and commence flocking behaviour
+TGT_RANGE = 4.5 # range within which patrollers actually register target's position and commence flocking behaviour
 RADIUS = 2 # radius for surrounding behaviour
 ANGULAR_VELOCITY = math.pi/4  # rads/sec
-LINEAR_VELOCITY = 0.1 # m/s
-VELOCITY_SCALE = 0.2
+LINEAR_VELOCITY = 0.4 # m/s
+VELOCITY_SCALE = 0.4
+LOWER_X = 0
+UPPER_X = 12
+LOWER_Y = 0
+UPPER_Y = 12
 
 # parameters
 NUM_BOTS = rospy.get_param("num_bots", 3)
@@ -60,32 +65,95 @@ class Patroller:
         self.initial_loc = (initX, initY)
         self.rate = rospy.Rate(FREQUENCY)
 
-        # initializing _cmd_vel_pub and target discovery publisher
-        self._cmd_vel_pub = rospy.Publisher("/" + self.robot_name + DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
-        self.found_target_pub = rospy.Publisher(DEFAULT_DISCOVERED_NAME, calcWays, queue_size=1)
-
-        # initializing patrol subscriber, target subscriber, and target discovery subscriber
-        self.patrol_sub = rospy.Subscriber("/" + self.robot_name + DEFAULT_PATROL_NAME, CoordArray, self.patrol_cb)
-        self.target_sub = rospy.Subscriber(TGT_TOPIC, Pose, self.target_cb)
-        self.found_target_sub = rospy.Subscriber(DEFAULT_DISCOVERED_NAME, calcWays, self.found_target_cb)
-
-        # initializing TF Listener
-        self.listener = tf.TransformListener()
-
         # instance variables
         self.patroller_pose = Pose()
         self.target_pose = Pose()
         self.target_loc = None
         self.found_target = False
         self.patrol_path = []
-        self.robot_loc = None ###~~### WHERE IS THIS POPULATED? AND WHAT IS IT POPULATED WITH? IS THIS RELIABLY UPDATED??
+        self.robot_loc = None
+        self.patrol_idx = 0
+        self.obstacles = []
+
+        self.G = self.build_graph()  # update movement graph
+
+        # initializing _cmd_vel_pub and target discovery publisher
+        self._cmd_vel_pub = rospy.Publisher("/" + self.robot_name + DEFAULT_CMD_VEL_TOPIC, Twist, queue_size=1)
+        self.found_target_pub = rospy.Publisher(DEFAULT_DISCOVERED_NAME, calcWays, queue_size=1)
+
+        # initializing patrol subscriber, target subscriber, and target discovery subscriber
+        self.obstacle_sub = rospy.Subscriber(OBST_TOPIC, CoordArray, self._obst_callback, queue_size=1)
+        self.patrol_sub = rospy.Subscriber("/" + self.robot_name + DEFAULT_PATROL_NAME, CoordArray, self.patrol_cb)
+        self.target_sub = rospy.Subscriber(TGT_TOPIC, Pose, self.target_cb)
+        self._target_pub = rospy.Publisher(TGT_TOPIC, Pose, queue_size=1)
+        self.found_target_sub = rospy.Subscriber(DEFAULT_DISCOVERED_NAME, calcWays, self.found_target_cb)
+
+        # initializing TF Listener
+        self.listener = tf.TransformListener()
 
 # --------------------------------------------------------------------------------------------------------------------------------------------------
 # CALL BACK METHODS
 # --------------------------------------------------------------------------------------------------------------------------------------------------
+    def build_graph(self):
+        temp_obstacles = self.obstacles
+        rejected = []
+        G = nx.Graph()
+        # build a graph of all possible neighbors we can visit to move around the world
+        for x in range(LOWER_X, UPPER_X):
+            for y in range(LOWER_Y, UPPER_Y):
+                x = float(x)
+                y = float(y)
+                up = y < UPPER_Y - 1
+                down = y > LOWER_Y + 1
+                right = x < UPPER_X - 1
+                left = x > LOWER_X + 1
+                if (x, y) not in temp_obstacles:
+                    if (up):
+                        if (x, y+1) not in temp_obstacles:
+                            G.add_edge((x,y), (x, y+1), weight=1)
+                    if (down):
+                        if (x, y-1) not in temp_obstacles:
+                            G.add_edge((x,y), (x, y-1), weight=1)
+                    if (right):
+                        if (x+1, y) not in temp_obstacles:
+                            G.add_edge((x,y), (x+1, y), weight=1)
+                    if (left):
+                        if (x-1, y) not in temp_obstacles:
+                            G.add_edge((x,y), (x-1, y), weight=1)
+        for p in temp_obstacles:  # sanity checks
+            assert p not in G.nodes
+        return G
+
+    def _obst_callback(self, msg):
+        obs = [x.elements for x in msg.coords]  # store list of wall locations
+        self.obstacles = set(obs)
+
     # Purpose: Sends a binary message if target is found
     def found_target_cb(self, msg):
         self.found_target = msg.calculate == 1
+
+    # Method to retrive and return the current position of the target with respect to the world frame
+    def in_target_range(self):
+        target_pose = Pose() # initialize target position
+
+        self.listener.waitForTransform("world", "robot_4/base_link", rospy.Time(0), rospy.Duration(4.0))
+        # get the transform and rotation matrices from tf listener
+        (trans, rot) = self.listener.lookupTransform("world", "robot_4/base_link",  rospy.Time(0))
+        target_position = (trans[0], trans[1])
+        target_pose.position.x, target_pose.position.y = trans[0], trans[1]  # ground truth target location
+
+        self.listener.waitForTransform("world", self.robot_name + "/base_link", rospy.Time(0), rospy.Duration(4.0))
+        # get the transform and rotation matrices from tf listener
+        (trans, rot) = self.listener.lookupTransform("world", self.robot_name + "/base_link",  rospy.Time(0))
+        robot_position = (trans[0], trans[1])
+
+        # we are in the target's range if we can see it and are less than a certain distance from it
+        if euclid_dist(robot_position[0], robot_position[1], target_position[0], target_position[1]) < TGT_RANGE \
+            and self.inSights(robot_position, target_position):
+            self.target_loc = target_position
+            return target_pose
+        else:
+            return None
 
     # Purpose: Stores the target's location in an (x, y) tuple
     def target_cb(self, msg):
@@ -94,9 +162,9 @@ class Patroller:
         self.target_loc = (msg.position.x, msg.position.y)
         self.rate.sleep()
 
-    # Purpose: calculates the patrol path?? what does this method do??
+    # Purpose: calculates the individual cycle for a patroller, contingent on their starting location
     def patrol_cb(self, msg):
-        self.patrol_path = [] ###~~### DO WE NEED THIS HERE? INITIALIZED IN __init__ METHOD
+        self.patrol_path = [] #  reset path to avoid overlap
         path = []
         self.rate.sleep()
         for coords in msg.coords:  # we have FloatLists here
@@ -106,7 +174,7 @@ class Patroller:
         res = path[startIdx:] + path[:startIdx]
         self.patrol_path = res  # doing this in case the patrol function is called before callback finishes
 
-    # Purpose: transforms the waypoint from the robot's to the world's reference frame??
+    # Purpose: transforms the waypoint from the world's reference frame to the robot's
     def get_transformed_point(self, waypoint):
         waypoint_stamped = PointStamped() # initializing as a new PointStamped message
         waypoint_stamped.header.frame_id = 'world' # specify that is for the world frame
@@ -119,158 +187,244 @@ class Patroller:
 # WOLFPACK/FLOCKING BEHAVIOUR METHODS -- NEED TO COMMENT THIS!!!!!
 # --------------------------------------------------------------------------------------------------------------------------------------------------
     def surround(self):
-        self.listener.waitForTransform( "world", self.robot_name + "/base_link", rospy.Time(0), rospy.Duration(4.0))
+        inRange = self.in_target_range()  # are we close enough to the target yet
+        if (inRange is not None):  # if we are then publish location
+            self._target_pub.publish(inRange)
 
-        # get the current transform and rotation matrices from tf listener
+        # get the current transform and rotation matrices from tf listener relative to the world frame
+        self.listener.waitForTransform( "world", self.robot_name + "/base_link", rospy.Time(0), rospy.Duration(4.0))
         (trans, rot) = self.listener.lookupTransform("world", self.robot_name + "/base_link",  rospy.Time(0))
         curr = (trans[0], trans[1])
-        target_loc_point = self.get_transformed_point(self.target_loc)
-        target_loc = (target_loc_point.point.x, target_loc_point.point.y)
-
-        distance_from_target = euclid_dist(0, 0, target_loc[0], target_loc[1])
-        distance_to_radius = distance_from_target - RADIUS  # stay TGT_RANGE away
-        # get velocity for moving towards target
-        angToTarget = math.atan2(target_loc[1], target_loc[0])
-        xRadius = distance_to_radius * math.cos(angToTarget)
-        yRadius = distance_to_radius * math.sin(angToTarget)
-
-        if self.robot_name == "robot_2":
-            print("Robot 2 surrounding:")
-            print("Robot 2's location:")
-            print(curr)
-            print("Target's location:")
-            print(self.target_loc)
-            print("Robot 2's distance from target:")
-            print(distance_from_target)
-            print("Angle from target to robot:")
-            print(angToTarget)
-            print("X and Y distance from safe zone boundary:")
-            print((xRadius, yRadius))
 
 
-        avgX, avgY = 0, 0  # coordinate of average robots
-        numRobotsInRange = 0
-        for i in range(self.numRobots):
-            otherRobotName = "robot_" + str(i)
-            if otherRobotName != self.robot_name:
-                self.listener.waitForTransform( "world", otherRobotName+ "/base_link", rospy.Time(0), rospy.Duration(4.0))
-                # get the other transform and rotation matrices from tf listener
-                (other_trans, rot) = self.listener.lookupTransform("world", otherRobotName + "/base_link",  rospy.Time(0))
-                other_loc_Point = self.get_transformed_point((other_trans[0], other_trans[1]))
-                other_loc = (other_loc_Point.point.x, other_loc_Point.point.y)
-                # find locations of other robots in range
-                if (euclid_dist(other_loc[0], other_loc[1], target_loc[0], target_loc[1]) <= RADIUS) and (distance_from_target <= RADIUS):
-                    avgX += other_loc[0]
-                    avgY += other_loc[1]
-                    numRobotsInRange += 1
-        if numRobotsInRange != 0:  # compute the center of all the robots in the average
-            avgX /= numRobotsInRange
-            avgY /= numRobotsInRange
+        inSight = True
+        # this section determines whether we can directly move towards the target or have to take a shortest path there
+        if (not self.canMoveTowards(curr, self.target_loc)):  # if we can't move towards the target at the moment
+            inSight = False
+            while self.G is None:
+                print("Sleeping to build graph")
+                rospy.sleep(1)
+            # get nearest neighbor to current that isn't a wall
+            currInt = (curr[0] - 0.5, curr[1] - 0.5)
+            # find bounds of current
+            floorX = math.floor(currInt[0])
+            ceilX = math.ceil(currInt[0])
+            floorY = math.floor(currInt[1])
+            ceilY = math.ceil(currInt[1])
+            nearestDist = float("inf")
+            nearestNeighbor = None
+            for neighbor in [(floorX, floorY), (floorX, ceilY), (ceilX, floorY), (ceilX, ceilY)]:
+                if neighbor not in self.obstacles and neighbor in self.G.nodes:  # making sure neighbor is in G.nodes
+                    dist = euclid_dist(curr[0], curr[1], neighbor[0], neighbor[1])
+                    if dist < nearestDist:  # updating neighbor if we find a lower distance
+                        nearestDist = dist
+                        nearestNeighbor = neighbor
 
-        # coordinates to move away from average of robots in center
-        separateX = -avgX
-        separateY = -avgY
-        separateDist = (separateX**2 + separateY**2)**0.5
+            # get nearest neighbor to target that isn't a wall
+            floorTX = float(math.floor(self.target_loc[0] - 0.5))
+            ceilTX = float(math.ceil(self.target_loc[0] - 0.5))
+            floorTY = float(math.floor(self.target_loc[1] - 0.5))
+            ceilTY = float(math.ceil(self.target_loc[1] - 0.5))
+            nearestTDist = float("inf")
+            nearestTNeighbor = None
+            for neighbor in [(floorTX, floorTY), (floorTX, ceilTY), (ceilTX, floorTY), (ceilTX, ceilTY)]:
+                if neighbor not in self.obstacles and neighbor in self.G.nodes:  # making sure neighbor is in G.nodes
+                    dist = euclid_dist(self.target_loc[0], self.target_loc[1], neighbor[0], neighbor[1])
+                    if dist < nearestDist:  # updating if we find a shorter distance
+                        nearestTDist = dist
+                        nearestTNeighbor = neighbor
 
-        # calculate weights for combining action
-        separateWeight = 0.5
-        if (separateDist + distance_to_radius) != 0:
-            separateWeight = separateDist / (separateDist + distance_to_radius)
-        followerWeight = 1 - separateWeight
+            # find shortest path that avoids obstacles to target from current
+            shortestPathToTarget = list(shortest_path(self.G, source=nearestNeighbor, target=nearestTNeighbor))
 
-        # calculate joint movement coords and angle
-        jointX = xRadius * followerWeight + separateX * separateWeight
-        jointY = yRadius * followerWeight + separateY * separateWeight
-        distanceToJoint = (jointX**2 + jointY**2)**0.5
-        angleToJoint = math.atan2(jointY, jointX)
-        clockwise = angleToJoint < 0
-        self.rotate_in_place(angleToJoint, clockwise)
-        self.move_forward(min(0.1, distanceToJoint))
+            # don't go all the way to target, stop a little outside
+            # be ambituous with our movement if possible, but don't get over eager
+            p = shortestPathToTarget[0]
+            for i in range(len(shortestPathToTarget)-1, 0, -1):  # by working backwords, we try to get as close to target as possible
+                if self.canMoveTowards(curr, shortestPathToTarget[i]):
+                    p = shortestPathToTarget[1]
+            inRange = self.in_target_range()
+            if (inRange is not None):  # make sure we keep letting our friends know if we found a target
+                self._target_pub.publish(inRange)
+
+            transformedPoint = self.get_transformed_point((p[0] + 0.5, p[1] + 0.5))  # need to translate back so we don't hit walls
+            targetPoint = (transformedPoint.point.x, transformedPoint.point.y)
+
+            # parameters for movement
+            distance = euclid_dist(0, 0, targetPoint[0], targetPoint[1])
+            angle = math.atan2(targetPoint[1], targetPoint[0])
+            clockwise = angle < 0
+            self.rotate_in_place(angle, clockwise)  # simple motion work
+            self.move_forward(distance)
+
+            # update the current transform and rotation matrices from tf listener relative to the world frame
+            self.listener.waitForTransform( "world", self.robot_name + "/base_link", rospy.Time(0), rospy.Duration(4.0))
+            (trans, rot) = self.listener.lookupTransform("world", self.robot_name + "/base_link",  rospy.Time(0))
+            curr = (trans[0], trans[1])
+             # break if we can move towards the robot at any time without obstacles blocking us
+            if self.canMoveTowards(curr, self.target_loc):
+                print("spotted target from position " + str(curr))
+                inSight = True
+                # break
+
+        if inSight:
+            # now we know we can see the target so we swarm it
+            target_loc_point = self.get_transformed_point(self.target_loc)
+            target_loc = (target_loc_point.point.x, target_loc_point.point.y)
+
+            distance_from_target = euclid_dist(0, 0, target_loc[0], target_loc[1])
+            distance_to_radius = distance_from_target - RADIUS  # stay TGT_RANGE away
+            # get velocity for moving towards target
+            angToTarget = math.atan2(target_loc[1], target_loc[0])
+            xRadius = distance_to_radius * math.cos(angToTarget)
+            yRadius = distance_to_radius * math.sin(angToTarget)
+
+            # calculating separation behavior
+            avgX, avgY = 0, 0  # coordinate of average robots
+            distanceFromSelf = []
+            neighborLocs = []
+            numRobotsInRange = 0
+            for i in range(self.numRobots):
+                otherRobotName = "robot_" + str(i)
+                if otherRobotName != self.robot_name:
+                    self.listener.waitForTransform( "world", otherRobotName+ "/base_link", rospy.Time(0), rospy.Duration(4.0))
+                    # get the other transform and rotation matrices from tf listener
+                    (other_trans, rot) = self.listener.lookupTransform("world", otherRobotName + "/base_link",  rospy.Time(0))
+                    other_loc_Point = self.get_transformed_point((other_trans[0], other_trans[1]))
+                    other_loc = (other_loc_Point.point.x, other_loc_Point.point.y)
+                    # find locations of other robots in range
+                    if (euclid_dist(other_loc[0], other_loc[1], target_loc[0], target_loc[1]) <= RADIUS) and (distance_from_target <= RADIUS):
+                        distanceFromSelf.append(-euclid_dist(other_loc[0], other_loc[1], 0, 0))  # used to make higher weight on closer neighbors
+                        neighborLocs.append(other_loc)
+            expDistance = np.exp(distanceFromSelf)  # convert logged distance to positive values
+            probs = expDistance / np.linalg.norm(expDistance)  # weights for neighbors
+            for i, loc in enumerate(neighborLocs):
+                avgX += probs[i] * loc[0]
+                avgY += probs[i] * loc[1]
+
+            # coordinates to move away from average of robots in center
+            separateX = -avgX
+            separateY = -avgY
+            separateDist = (separateX**2 + separateY**2)**0.5
+
+            # calculate weights for combining action
+            separateWeight = 0.5
+            if (separateDist + distance_to_radius) != 0:
+                separateWeight = separateDist / (separateDist + distance_to_radius)
+            followerWeight = 1 - separateWeight
+
+            # calculate joint movement coords and angle
+            jointX = xRadius * followerWeight + separateX * separateWeight
+            jointY = yRadius * followerWeight + separateY * separateWeight
+            distanceToJoint = (jointX**2 + jointY**2)**0.5
+            angleToJoint = math.atan2(jointY, jointX)
+            clockwise = angleToJoint < 0
+
+            inRange = self.in_target_range()
+            if (inRange is not None):
+                self._target_pub.publish(inRange)
+
+            # movement once we are able to balance our subgoals without obstacles
+            self.rotate_in_place(angleToJoint, clockwise)
+            self.move_forward(min(0.1, distanceToJoint))
 
         self.rate.sleep()
 
     #IS THIS THE WOLFPACK PATROL METHOD?
     def patrol(self):
         if len(self.patrol_path) > 0:  # non empty patrol path
-            # print(self.patrol_path)
-            for target in self.patrol_path:
-                self.listener.waitForTransform("world", self.robot_name + "/base_link", rospy.Time(0), rospy.Duration(4.0))
-                # get the transform and rotation matrices from tf listener
-                (trans, rot) = self.listener.lookupTransform("world", self.robot_name + "/base_link",  rospy.Time(0))
+            target = self.patrol_path[self.patrol_idx]  # next point we are going to
 
-                print("Robot perceived location in world frame:")
-                print((trans[0], trans[1]))
+            # get the transform and rotation matrices from tf listener
+            # we don't actually need this section we just use it for getting debugging information
+            self.listener.waitForTransform("world", self.robot_name + "/base_link", rospy.Time(0), rospy.Duration(4.0))
+            (trans, rot) = self.listener.lookupTransform("world", self.robot_name + "/base_link",  rospy.Time(0))
+            print("Robot perceived location in world frame:")
+            print((trans[0], trans[1]))
+            self.robot_loc = (0, 0)  # making calculations from robot's perspective
+            print("Target robot wants to go to from world frame: ")
+            print(target)
 
-                self.robot_loc = (0, 0)  # making calculations from robot's perspective
-                print("Target robot wants to go to from world frame: ")
-                print(target)
-                coords = self.get_transformed_point(target)
+            # we do need this - the world frame target relative to the robot's point of view
+            coords = self.get_transformed_point(target)
 
-                coords = [coords.point.x, coords.point.y]
-                print("Target robot wants to go to from robot frame: ")
-                print(coords)
+            coords = [coords.point.x, coords.point.y]
+            print("Target robot wants to go to from robot frame: ")
+            print(coords)
+
+            dist = euclid_dist(coords[0], coords[1], 0, 0)
+
+            angle = math.atan2(coords[1], coords[0])
+
+            if angle * -1 >= 0:
+                clockwise = True
+            else:
+                clockwise = False
+
+            self.rotate_in_place(angle, clockwise)  # move
+            self.move_forward(dist)  # move
+            try:
+                self.patrol_idx = (self.patrol_idx + 1) % len(self.patrol_path)  # for next iteration of patrolling so that we repeat
+            except:
+                print("Updating patrol idx failed. Perceived patrol path has length of " + str(len(self.patrol_path)))
+
+            self.rate.sleep()
 
 
-
-
-                dist = euclid_dist(coords[0], coords[1], 0, 0)
-
-                angle = math.atan2(coords[1], coords[0])
-
-                if angle * -1 >= 0:
-                    clockwise = True
-                else:
-                    clockwise = False
-
-                self.rotate_in_place(angle, clockwise)  # move
-                self.move_forward(dist)  # move
-                self.rate.sleep()
 
 
     # Method to retrive and return the current position of the patroller with respect to the world frame
     def retrieve_pose(self):
         patroller_pose = Pose() # initialize patroller position
 
-        now = rospy.Time(0)
-        self.listener.waitForTransform("world", self.bot_name + "/odom", now, rospy.Duration(4.0))
+        self.listener.waitForTransform("world", self.robot_name + DEFAULT_BASE_LINK, rospy.Time(0), rospy.Duration(4.0))
 
         # get the transform and rotation matrices from tf listener
-        (trans, rot) = self.listener.lookupTransform("world", self.bot_name + "/odom", now)
+        (trans, rot) = self.listener.lookupTransform("world", self.robot_name + DEFAULT_BASE_LINK, rospy.Time(0))
 
         # populate the patroller position
         patroller_pose.position.x, patroller_pose.position.y = trans[0], trans[1]
 
         return patroller_pose
 
-    # Purpose: method that tests if the direct line of visibility from the patroller to the target is clear of obstacles
-    # Returns: a boolean true, if there is clear visibility and false if there is an obstacle
-    # Proposed run scheme: something like, "while patroller.visibility_test() returns false, keep moving along, run patroller.visibility_test()"
-    def visibility_test(self):
-        self.patroller_pose = self.retrieve_pose() # populate the current position of the patroller
-        visible_x_cords = []
-        visible_y_cords = []
 
-        no_obstacle = False
+    # takes in a base coord and target coord  (x, y) tuples. Returns true if there is not object interfering with them
+    def inSights(self, base, target):
+        (bx, by) = base
+        (tx, ty) = target
+        print(base)
+        print(target)
+        lowerX = int(min(bx, tx))
+        upperX = int(max(bx, tx))
+        lowerY = int(min(by, ty))
+        upperY = int(max(by, ty))
 
-        for x in range(self.patroller_pose.position.x, self.target_pose.position.x):
-            visible_x_cords.add(x) # add all of the x coordinates to check to a list
+        if (bx < tx):  # base is to the left of target
+            m = (ty - by) / (tx - bx)
+        else:  # base is to the right of target
+            m = (by - ty) / (bx - tx)
+        b = by - (m * bx)  # y intercept
 
-        for y in range(self.patroller_pose.position.y, self.target_pose.position.y):
-            visible_y_cords.add(y) # add all of the y coordinates to check to a list
+        xPoints = np.linspace(lowerX, upperX, 12)  # list of 12 even intervals between two points
+        for x in xPoints:
+            y = (m * x) + b
+            gridCoord = (math.floor(x), math.floor(y))
+            if gridCoord in self.obstacles:  # if we run into obstacles on our line
+                return False  # we can't see the target
+        return True
 
-        #### PSUEDOCODE FOR THE REST OF IT BECAUSE I AM TIRED, WILL FINISH UP LATER -- ALSO WE NEED AN INSTANCE VARIABLE (naming it M for now) THAT STORES THE BOUNDARIES (OUTLINES) OF THE OBSTACLES
-        # for every x in visible_x_cords:
-        #   if x in M:
-        #       if floor[corresponding y of the x in visible_x_cords] == bottom of the obstacle /// use indices to loop through to be able to do this:
-        #           no_obstacle = False
-        #           break
-        # for every y in visible_y_cords:
-        #   if y in M:
-        #       if floor[corresponding x of the y in visible_y_cords] == left of the obstacle /// use indices to loop through to be able to do this:
-        #           no_obstacle = False
-        #           break
-
-        ### DONT MIND THIS, NEED TO FINISH IT OFF BUT MY BRAIN IS FRIED
+    # can our robot completely clear the space to a target
+    def canMoveTowards(self, curr, target):
+        robotSize = 0.25
+        robotShift = robotSize / 2  # width / 2
+        (cx, cy) = curr
+        # we treat a robot as a 3 by 3 graph
+        # if each vertex on this graph has an unobstructed path to the target, we think we can move towards it with no issue
+        for x in [cx - robotShift, cx, cx + robotShift]:
+            for y in [cy - robotShift, cy, cy + robotShift]:
+                if not self.inSights((x, y), target):
+                    return False
+        return True
 
 
 # --------------------------------------------------------------------------------------------------------------------------------------------------
@@ -334,12 +488,15 @@ class Patroller:
         self._cmd_vel_pub.publish(twist_msg)
 
 
+
+
 # --------------------------------------------------------------------------------------------------------------------------------------------------
 # MAIN METHOD
 # --------------------------------------------------------------------------------------------------------------------------------------------------
 def main():
+    # get params for name, initial locaiton, and num robots
     numRobots = rospy.get_param("/numRobots")
-    robot_name = rospy.get_param("robot_name")  # get relative param for name
+    robot_name = rospy.get_param("robot_name")
     initialX = rospy.get_param("x_pos")
     initialY = rospy.get_param("y_pos")
 
@@ -349,12 +506,23 @@ def main():
 
     # try:
     rate = rospy.Rate(FREQUENCY)
-    while not rospy.is_shutdown():
-        # if patroller.target_loc is not None:
-        #     patroller.surround()
-        # else:
+    builtObsGraph = False
 
-        patroller.patrol()
+    while not rospy.is_shutdown():
+        if (len(patroller.obstacles) > 0):  # comment this line for a world without obstacles
+            if not builtObsGraph:  # build a movement graph of all obstacles once our callback registers the full list
+                patroller.G = patroller.build_graph()
+                builtObsGraph = True
+            inRange = patroller.in_target_range()  # make sure to publish target locations if we're ever in range
+            if inRange is not None:
+                patroller._target_pub.publish(inRange)
+
+            if patroller.target_loc is not None:  # found the target so we surround
+                print(robot_name + " Surrounding")
+                patroller.surround()
+            else:  # didn't find the target so we patroll
+                print(robot_name + " Patrolling")
+                patroller.patrol()
         rate.sleep()
 
 
