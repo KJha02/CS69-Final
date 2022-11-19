@@ -1,5 +1,5 @@
 <launch>
-    <arg name="world_file" default="$(find wolfpack)/worlds/wolf_stage0.world" />
+    <arg name="world_file" default="$(find wolfpack)/worlds/wolf_stage1.world" />
     <param name="/use_sim_time" value="true"/>
     <param name="/numRobots" value="4"/>
     <param name="/com_dist" value="3"/>
@@ -19,7 +19,7 @@
       <param name="robot_name" value="robot_0" />
       <remap from="base_scan" to="scan" />
       <param name= "x_pos" value="0.25"/>
-      <param name= "y_pos" value="5.25"/>
+      <param name= "y_pos" value="0.25"/>
     </group>
     <group ns= "robot_1">
       <param name="robot_name" value="robot_1" />
@@ -30,13 +30,13 @@
     <group ns= "robot_2">
       <param name="robot_name" value="robot_2" />
       <remap from="base_scan" to="scan" />
-      <param name= "x_pos" value="6.25"/>
+      <param name= "x_pos" value="11.25"/>
       <param name= "y_pos" value="11.25"/>
     </group>
     <group ns= "robot_3">
       <param name="robot_name" value="robot_3" />
-      <param name= "x_pos" value="6.25"/>
-      <param name= "y_pos" value="5.25"/>
+      <param name= "x_pos" value="11.25"/>
+      <param name= "y_pos" value="0.25"/>
       <remap from="base_scan" to="scan" />
     </group>
     <group ns= "robot_4">
@@ -64,7 +64,7 @@
     <node name="robot_0_init_pose" pkg="wolfpack" type="initposes" respawn="false" output="screen" >
       <param name="turtle" type="string" value="robot_0" />
       <param name= "x_pos" value="0.25"/>
-      <param name= "y_pos" value="5.25"/>
+      <param name= "y_pos" value="0.25"/>
       <param name= "z_pos" value="0.0"/>
     </node>
     <node name="robot_1_init_pose" pkg="wolfpack" type="initposes" respawn="false" output="screen" >
@@ -75,20 +75,20 @@
     </node>
     <node name="robot_2_init_pose" pkg="wolfpack" type="initposes" respawn="false" output="screen" >
       <param name="turtle" type="string" value="robot_2" />
-      <param name= "x_pos" value="6.25"/>
+      <param name= "x_pos" value="11.25"/>
       <param name= "y_pos" value="11.25"/>
       <param name= "z_pos" value="0.0"/>
     </node>
     <node name="robot_3_init_pose" pkg="wolfpack" type="initposes" respawn="false" output="screen" >
       <param name="turtle" type="string" value="robot_3" />
-      <param name= "x_pos" value="6.25"/>
-      <param name= "y_pos" value="5.25"/>
+      <param name= "x_pos" value="11.25"/>
+      <param name= "y_pos" value="0.25"/>
       <param name= "z_pos" value="0.0"/>
     </node>
     <node name="robot_4_init_pose" pkg="wolfpack" type="initposes" respawn="false" output="screen" >
       <param name="turtle" type="string" value="robot_4" />
-      <param name= "x_pos" value="2.25"/>
-      <param name= "y_pos" value="2.25"/>
+      <param name= "x_pos" value="6.0"/>
+      <param name= "y_pos" value="8.0"/>
       <param name= "z_pos" value="0.0"/>
     </node>
 

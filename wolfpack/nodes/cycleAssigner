@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+# finds the patrolling cycle after creating an MST around empty points in the graph
+
 import roslib
 roslib.load_manifest('wolfpack')
 import random
@@ -18,20 +20,19 @@ OBST_TOPIC = "/obstacle_topic"
 
 class Assigner:
     def __init__(self, numRobots):
-        # creating a publisher that will have all of the obstacles 
+        # make a publisher of obstacles that all of the robots will see
+        
         self.obstacles_pub = rospy.Publisher(OBST_TOPIC, CoordArray, queue_size=1)
+        self.wall_grid = [[0 for _ in range(UPPER_Y)] for __ in range(UPPER_X)] # create grid of walls
 
-        self.wall_grid = [[0 for _ in range(UPPER_Y)] for __ in range(UPPER_X)]  # TODO: Fill in 12 by 12 2d array
-
-        wall_locations = [[7, 8], [8, 9], [9,9], [10,9], [10,8], [10,7], [10, 6],
+        # fill in wall locations
+        self.wall_locations = []
+        # comment out the next line to have an obstacle-less world
+        self.wall_locations = [[7, 8], [8, 9], [9,9], [10,9], [10,8], [10,7], [10, 6],
                         [4, 7], [4, 8], [4, 9], [4, 10],
                         [1, 3], [2, 3], [2, 4], [3, 4], [4, 1], [4, 2],
                         [7, 3], [8, 3], [9, 3], [10, 2], [10, 3], [10, 4], [9, 4]]
-
-        self.obstacles_pub.publish(wall_locations) # publishg the wall locations to the obstacles publisher
-
-
-        for locs in wall_locations:
+        for locs in self.wall_locations:  # mark all walls as occupied on the grid
             self.wall_grid[locs[0]][locs[1]] = 1
 
 
@@ -42,12 +43,24 @@ class Assigner:
         self.patrol_publishers = {}
 
 
-        self.full_cycle = self.makeCycle()
-
+        self.full_cycle = self.makeCycle()  # generate the full cycle
 
         for i in range(self.numRobots):  # assigning default paths
             self.assigned_path[i] = self.full_cycle
             self.patrol_publishers[i] = rospy.Publisher('/robot_' + str(i) + '/patrol', CoordArray, queue_size=1)
+
+    def publish_obstacles(self):
+        # publishes obstacle locations to global topic
+        coordMsgs = []
+        for obst in self.wall_locations:
+            msg = FloatList()
+            msg.elements = obst
+            msg.robot_id = -1
+            msg.dist = -1.0
+            coordMsgs.append(msg)
+        coordArrMsg = CoordArray()
+        coordArrMsg.coords = coordMsgs
+        self.obstacles_pub.publish(coordArrMsg)
 
     def makeCycle(self):
         # # restricting robot movement
@@ -59,35 +72,37 @@ class Assigner:
                 down = y > LOWER_Y + 1
                 right = x < UPPER_X - 1
                 left = x > LOWER_X + 1
-                # adding neighbors if in bounds and not an obstacle
-                if (up):
-                    try:
-                        if (self.wall_grid[x][y+1] == 0):
-                            G.add_edge((x,y), (x, y+1), weight=1)
-                    except:
-                        print("failed going up")
-                        print((x, y))
-                if (down):
-                    try:
-                        if (self.wall_grid[x][y-1] == 0):
-                            G.add_edge((x,y), (x, y-1), weight=1)
-                    except:
-                        print("failed going down")
-                        print((x, y))
-                if (left):
-                    try:
-                        if (self.wall_grid[x-1][y] == 0):
-                            G.add_edge((x,y), (x-1, y), weight=1)
-                    except:
-                        print("failed going left")
-                        print((x, y))
-                if (right):
-                    try:
-                        if (self.wall_grid[x+1][y] == 0):
-                            G.add_edge((x,y), (x+1, y), weight=1)
-                    except:
-                        print("failed going right")
-                        print((x, y))
+
+                if self.wall_grid[x][y] == 0:  # base one has to be in bounds
+                    # adding neighbors if in bounds and not an obstacle
+                    if (up):
+                        try:
+                            if (self.wall_grid[x][y+1] == 0):
+                                G.add_edge((x,y), (x, y+1), weight=1)
+                        except:
+                            print("failed going up")
+                            print((x, y))
+                    if (down):
+                        try:
+                            if (self.wall_grid[x][y-1] == 0):
+                                G.add_edge((x,y), (x, y-1), weight=1)
+                        except:
+                            print("failed going down")
+                            print((x, y))
+                    if (left):
+                        try:
+                            if (self.wall_grid[x-1][y] == 0):
+                                G.add_edge((x,y), (x-1, y), weight=1)
+                        except:
+                            print("failed going left")
+                            print((x, y))
+                    if (right):
+                        try:
+                            if (self.wall_grid[x+1][y] == 0):
+                                G.add_edge((x,y), (x+1, y), weight=1)
+                        except:
+                            print("failed going right")
+                            print((x, y))
 
         mst = minimum_spanning_tree(G)  # get mst from graph using kruskal's algorithm by default
 
@@ -134,11 +149,7 @@ class Assigner:
 
             return ((float(loc1) / 2)+ 0.25, (float(loc2) / 2) + 0.25)
 
-        print("pre conversion")
-        print(cycle)
         cycle = [convertCoord(x) for x in cycle]
-        print("post conversion")
-        print(cycle)
 
         return cycle
 
@@ -161,6 +172,7 @@ def main():
     assigner = Assigner(numRobots)
     rate = rospy.Rate(FREQUENCY)
     while not rospy.is_shutdown():
+        assigner.publish_obstacles()
         assigner.publish_paths()
         rate.sleep()
 
