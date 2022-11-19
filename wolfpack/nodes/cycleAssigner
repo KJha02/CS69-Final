@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+# finds the patrolling cycle after creating an MST around empty points in the graph
 
 import roslib
 roslib.load_manifest('wolfpack')
@@ -20,6 +20,8 @@ OBST_TOPIC = "/obstacle_topic"
 
 class Assigner:
     def __init__(self, numRobots):
+        # make a publisher of obstacles that all of the robots will see
+        
         self.obstacles_pub = rospy.Publisher(OBST_TOPIC, CoordArray, queue_size=1)
         self.wall_grid = [[0 for _ in range(UPPER_Y)] for __ in range(UPPER_X)] # create grid of walls
 

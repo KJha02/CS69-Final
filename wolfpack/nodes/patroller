@@ -330,7 +330,7 @@ class Patroller:
 
         self.rate.sleep()
 
-    #IS THIS THE WOLFPACK PATROL METHOD?
+    # follows the relative cycle for a robot that is patrolling
     def patrol(self):
         if len(self.patrol_path) > 0:  # non empty patrol path
             target = self.patrol_path[self.patrol_idx]  # next point we are going to
@@ -369,9 +369,6 @@ class Patroller:
                 print("Updating patrol idx failed. Perceived patrol path has length of " + str(len(self.patrol_path)))
 
             self.rate.sleep()
-
-
-
 
     # Method to retrive and return the current position of the patroller with respect to the world frame
     def retrieve_pose(self):
